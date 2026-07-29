@@ -1,0 +1,32 @@
+[
+  {
+    "title_hint": "Salesforce access rights review excludes profile-level permissions",
+    "observed_gap": "During the FY2024 annual Salesforce Sales Cloud access rights review, S&M validated the user list and assigned profiles but did not reconcile the access rights attached to each profile against employee job responsibilities. The review process therefore provides incomplete assurance that only appropriately scoped permissions are retained. This gap in the review scope constitutes a control deficiency under CDL's Protection Obligation.",
+    "evidence_summary": "Annual review performed covered user list and profile assignments only; access rights within profiles were not checked. The omission was confirmed via review of the access rights review documentation and walkthrough with S&M. Three instances of non-required access rights were subsequently identified (see Finding A1 details).",
+    "evidence_refs": [
+      "Salesforce access rights review documentation (annual review cycle, FY2024)",
+      "CDL PDPA Manual — Protection Obligation (access control requirements)",
+      "FY2024 Internal Audit Working Paper: Finding A1 — Salesforce access rights review"
+    ],
+    "sop_refs": [
+      "CDL PDPA Manual — Protection Obligation",
+      "CDL Internal Control Policy — annual access rights review procedures"
+    ],
+    "risk_category": "Compliance"
+  },
+  {
+    "title_hint": "Three staff retain excess Salesforce permissions beyond job scope",
+    "observed_gap": "As a result of the incomplete review process, three employees were found to hold access rights in Salesforce that are not required for their job responsibilities. Chua Wan Khi (AVP, PD-S&M) and Rachel Ong (Senior Manager, PD-S&M) both held Leads (Read/Create/Edit/Delete), Accounts (Create/Edit) and Contacts (Create/Edit) permissions under the CDL Sales User profile. Samantha Tan (Senior Manager, Branding) held Accounts (Read/Create/Edit) and Contacts (Read/Create/Edit) under CDL Marketing User. These excess rights create an elevated risk of unauthorised access to or manipulation of personal data stored in Salesforce.",
+    "evidence_summary": "3 of 3 sampled profiles reviewed contained at least one permission exceeding the employee's job scope (100% exception rate on profiles reviewed). Specific objects affected: Leads, Accounts, Contacts. Details documented in Table A1-1 of the FY2024 audit report.",
+    "evidence_refs": [
+      "Table A1-1: Access rights not required for employee's job responsibilities (FY2024 Internal Audit Report, page 4)",
+      "Salesforce user profile export — CDL Sales User and CDL Marketing User profiles",
+      "CDL PDPA Manual — Protection Obligation (principle of least privilege)"
+    ],
+    "sop_refs": [
+      "CDL PDPA Manual — Protection Obligation",
+      "CDL IT Access Control Policy — principle of least privilege"
+    ],
+    "risk_category": "Compliance"
+  }
+]

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 720" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif">
+  <defs>
+    <marker id="arrowHead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#1a1a1a" />
+    </marker>
+    <marker id="arrowStart" markerWidth="10" markerHeight="7" refX="1" refY="3.5" orient="auto">
+      <polygon points="10 0, 0 3.5, 10 7" fill="#1a1a1a" />
+    </marker>
+  </defs>
+
+  <!-- Title boundary -->
+  <rect x="24" y="16" width="1052" height="688" fill="none" stroke="#404040" stroke-width="2" stroke-dasharray="10 6" rx="4" />
+  <text x="550" y="44" text-anchor="middle" font-size="15" font-weight="600" fill="#000">CDL Internal Network (Portal + AWS-hosted service)</text>
+
+  <!-- User -->
+  <g transform="translate(500, 58)">
+    <circle cx="50" cy="22" r="14" fill="#d9d9d9" stroke="#404040" />
+    <path d="M50 40 L50 58 M32 48 L68 48 M50 58 L38 78 M50 58 L62 78" stroke="#404040" stroke-width="2" fill="none" />
+    <text x="50" y="98" text-anchor="middle" font-size="11" fill="#000">User via Portal</text>
+    <text x="50" y="112" text-anchor="middle" font-size="10" fill="#404040">Entra ID SSO • specify SharePoint folder • input issues • run audit • download</text>
+  </g>
+
+  <!-- API Gateway between user and web app -->
+  <text x="550" y="192" text-anchor="middle" font-size="11" font-weight="600" fill="#000">Amazon API Gateway</text>
+
+  <!-- Arrow user -> API Gateway -> web app -->
+  <line x1="550" y1="175" x2="550" y2="170" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
+  <line x1="550" y1="204" x2="550" y2="210" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
+
+  <!-- #1 Left: SharePoint evidence source (smaller + centered text) -->
+  <rect x="48" y="228" width="220" height="132" fill="#f5f5f5" stroke="#404040" stroke-width="2" rx="4" />
+  <text x="158" y="286" text-anchor="middle" font-size="12" font-weight="600" fill="#000">SharePoint Project Folder</text>
+  <text x="158" y="306" text-anchor="middle" font-size="9.5" fill="#404040">User uploads files to SharePoint</text>
+  <text x="158" y="322" text-anchor="middle" font-size="9.5" fill="#404040">Portal receives folder URL / path</text>
+
+  <!-- Arrow left to center -->
+  <path d="M268 294 L420 294" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
+  <text x="340" y="286" text-anchor="middle" font-size="9" fill="#404040">Microsoft Graph read</text>
+
+  <!-- #2 Center: Web app (smaller + centered text) -->
+  <rect x="420" y="228" width="260" height="132" fill="#f5f5f5" stroke="#404040" stroke-width="2" rx="4" />
+  <text x="550" y="286" text-anchor="middle" font-size="13" font-weight="600" fill="#000">Web App (API + Orchestrator + Worker)</text>
+  <text x="550" y="304" text-anchor="middle" font-size="9.5" fill="#404040">AWS ECS / EKS (container)</text>
+
+  <!-- Arrow center <-> right -->
+  <line x1="680" y1="294" x2="812" y2="294" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" marker-start="url(#arrowStart)" />
+  <text x="746" y="286" text-anchor="middle" font-size="9" fill="#404040">read/write</text>
+
+  <!-- #3 Right: Temp storage / metadata (smaller + centered text) -->
+  <rect x="812" y="228" width="240" height="132" fill="#f5f5f5" stroke="#404040" stroke-width="2" rx="4" />
+  <text x="932" y="288" text-anchor="middle" font-size="12" font-weight="600" fill="#000">Temp storage / metadata</text>
+  <text x="932" y="306" text-anchor="middle" font-size="9.5" fill="#404040">S3 + ElastiCache (job state)</text>
+
+  <!-- Branch line from hub bottom + horizontal bus (ends at last spoke) -->
+  <line x1="550" y1="360" x2="550" y2="410" stroke="#1a1a1a" stroke-width="1.5" />
+  <line x1="140" y1="410" x2="990" y2="410" stroke="#1a1a1a" stroke-width="1.5" />
+
+  <!-- Spokes down -->
+  <line x1="140" y1="410" x2="140" y2="438" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
+  <line x1="310" y1="410" x2="310" y2="438" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
+  <line x1="480" y1="410" x2="480" y2="438" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
+  <line x1="650" y1="410" x2="650" y2="438" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
+  <line x1="820" y1="410" x2="820" y2="438" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
+  <line x1="990" y1="410" x2="990" y2="438" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
+
+  <!-- Bottom row boxes (monochrome) — generalized and reusable -->
+  <!-- #4 Document parsing -->
+  <rect x="60" y="440" width="160" height="96" fill="#ffffff" stroke="#404040" stroke-width="1.5" rx="3" />
+  <text x="140" y="462" text-anchor="middle" font-size="11" font-weight="600" fill="#000">Document Parsing</text>
+  <text x="140" y="480" text-anchor="middle" font-size="9.5" fill="#404040">AWS Textract</text>
+  <text x="140" y="496" text-anchor="middle" font-size="9.5" fill="#404040">PDF / image OCR</text>
+
+  <!-- #5 Persistent storage -->
+  <rect x="230" y="440" width="160" height="96" fill="#ffffff" stroke="#404040" stroke-width="1.5" rx="3" />
+  <text x="310" y="458" text-anchor="middle" font-size="11" font-weight="600" fill="#000">Persistent Storage</text>
+  <text x="310" y="478" text-anchor="middle" font-size="9.5" fill="#404040">S3 output / artefacts</text>
+  <text x="310" y="496" text-anchor="middle" font-size="9.5" fill="#404040">Portal download packages</text>
+
+  <!-- LLM endpoint -->
+  <rect x="400" y="440" width="160" height="96" fill="#ffffff" stroke="#404040" stroke-width="1.5" rx="3" />
+  <text x="480" y="462" text-anchor="middle" font-size="11" font-weight="600" fill="#000">LLM Endpoint</text>
+  <text x="480" y="480" text-anchor="middle" font-size="9.5" fill="#404040">AWS Bedrock Claude</text>
+  <text x="480" y="496" text-anchor="middle" font-size="9.5" fill="#404040">Claude model endpoint</text>
+
+  <!-- Identity & access -->
+  <rect x="570" y="440" width="160" height="96" fill="#ffffff" stroke="#404040" stroke-width="1.5" rx="3" />
+  <text x="650" y="462" text-anchor="middle" font-size="11" font-weight="600" fill="#000">Identity &amp; Access</text>
+  <text x="650" y="480" text-anchor="middle" font-size="9.5" fill="#404040">Entra ID (Portal SSO)</text>
+  <text x="650" y="496" text-anchor="middle" font-size="9.5" fill="#404040">Graph folder access</text>
+
+  <!-- #6 Logs / Observability -->
+  <rect x="740" y="440" width="160" height="96" fill="#ffffff" stroke="#404040" stroke-width="1.5" rx="3" />
+  <text x="820" y="462" text-anchor="middle" font-size="11" font-weight="600" fill="#000">Logs / Observability</text>
+  <text x="820" y="480" text-anchor="middle" font-size="9.5" fill="#404040">Amazon CloudWatch</text>
+  <text x="820" y="496" text-anchor="middle" font-size="9.5" fill="#404040">Logs • metrics • traces</text>
+
+  <!-- #7 Azure SQL Database -->
+  <rect x="910" y="440" width="160" height="96" fill="#ffffff" stroke="#404040" stroke-width="1.5" rx="3" />
+  <text x="990" y="462" text-anchor="middle" font-size="11" font-weight="600" fill="#000">Amazon RDS</text>
+  <text x="990" y="480" text-anchor="middle" font-size="9.5" fill="#404040">Case metadata</text>
+  <text x="990" y="496" text-anchor="middle" font-size="9.5" fill="#404040">Audit logs</text>
+
+  <!-- Footnote -->
+  <text x="550" y="570" text-anchor="middle" font-size="9.5" fill="#606060">AWS reference architecture - users upload evidence to SharePoint, specify the project folder in Portal, and workers read via Microsoft Graph; LLM via AWS Bedrock Claude.</text>
+</svg>

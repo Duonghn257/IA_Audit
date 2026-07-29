@@ -1,0 +1,11 @@
+anthropic
+alembic
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg[binary]
+python-multipart
+python-docx
+pdfplumber
+openpyxl
+python-dotenv

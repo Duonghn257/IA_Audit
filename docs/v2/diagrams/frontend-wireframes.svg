@@ -1,0 +1,283 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180" role="img" aria-labelledby="title desc">
+  <title id="title">Operation Report Jedi frontend flow and wireframes</title>
+  <desc id="desc">High-level flow and four wireframes: combined projects status and live progress, observation inbox, add observation, and draft review.</desc>
+
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#0f766e"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; filter: url(#shadow); }
+      .topbar { fill: #0f4e4a; }
+      .sidebar { fill: #f1f5f9; }
+      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.2; }
+      .card-ready { fill: #f0fdfa; stroke: #5eead4; stroke-width: 1.2; }
+      .card-warn { fill: #fffbeb; stroke: #fbbf24; stroke-width: 1.2; }
+      .input { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.2; }
+      .button { fill: #0f766e; }
+      .button-secondary { fill: #ffffff; stroke: #0f766e; stroke-width: 1.2; }
+      .button-disabled { fill: #e2e8f0; }
+      .chip { fill: #ccfbf1; stroke: #5eead4; stroke-width: 0.8; }
+      .chip-blue { fill: #eff6ff; stroke: #93c5fd; stroke-width: 0.8; }
+      .chip-warn { fill: #fef3c7; stroke: #fbbf24; stroke-width: 0.8; }
+      .divider { stroke: #e2e8f0; stroke-width: 1; }
+      .flow-line { stroke: #0f766e; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .title { font: 700 30px Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 15px Arial, sans-serif; fill: #475569; }
+      .flow-num { font: 700 14px Arial, sans-serif; fill: #ffffff; }
+      .flow-label { font: 600 13px Arial, sans-serif; fill: #0f172a; }
+      .screen-title { font: 700 17px Arial, sans-serif; fill: #ffffff; }
+      .screen-subtitle { font: 600 11px Arial, sans-serif; fill: #ccfbf1; }
+      .h2 { font: 700 17px Arial, sans-serif; fill: #0f172a; }
+      .h3 { font: 700 13px Arial, sans-serif; fill: #0f172a; }
+      .body { font: 400 12px Arial, sans-serif; fill: #334155; }
+      .small { font: 400 10.5px Arial, sans-serif; fill: #64748b; }
+      .small-bold { font: 700 10.5px Arial, sans-serif; fill: #334155; }
+      .button-text { font: 700 11px Arial, sans-serif; fill: #ffffff; }
+      .button-text-secondary { font: 700 11px Arial, sans-serif; fill: #0f766e; }
+      .button-text-disabled { font: 700 11px Arial, sans-serif; fill: #64748b; }
+      .status-ok { font: 700 11px Arial, sans-serif; fill: #047857; }
+      .status-warn { font: 700 11px Arial, sans-serif; fill: #b45309; }
+      .nav { font: 600 11px Arial, sans-serif; fill: #475569; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="1180"/>
+
+  <text class="title" x="60" y="54">Operation Report Jedi — Frontend Experience</text>
+  <text class="subtitle" x="60" y="82">AI pre-fills observations from artefacts; the auditor validates evidence and approves every issue before DOCX generation.</text>
+
+  <!-- Flow -->
+  <g aria-label="Six step flow">
+    <path class="flow-line" d="M164 151 H298"/>
+    <path class="flow-line" d="M420 151 H554"/>
+    <path class="flow-line" d="M676 151 H810"/>
+    <path class="flow-line" d="M932 151 H1066"/>
+    <path class="flow-line" d="M1188 151 H1322"/>
+
+    <g transform="translate(60 110)">
+      <rect class="card" width="104" height="82" rx="14"/>
+      <circle cx="52" cy="28" r="17" fill="#0f766e"/>
+      <text class="flow-num" x="52" y="33" text-anchor="middle">1</text>
+      <text class="flow-label" x="52" y="60" text-anchor="middle">Project</text>
+      <text class="flow-label" x="52" y="75" text-anchor="middle">+ status</text>
+    </g>
+    <g transform="translate(316 110)">
+      <rect class="card" width="104" height="82" rx="14"/>
+      <circle cx="52" cy="28" r="17" fill="#0f766e"/>
+      <text class="flow-num" x="52" y="33" text-anchor="middle">2</text>
+      <text class="flow-label" x="52" y="60" text-anchor="middle">Process +</text>
+      <text class="flow-label" x="52" y="75" text-anchor="middle">live progress</text>
+    </g>
+    <g transform="translate(572 110)">
+      <rect class="card" width="104" height="82" rx="14"/>
+      <circle cx="52" cy="28" r="17" fill="#0f766e"/>
+      <text class="flow-num" x="52" y="33" text-anchor="middle">3</text>
+      <text class="flow-label" x="52" y="60" text-anchor="middle">Observations</text>
+      <text class="flow-label" x="52" y="75" text-anchor="middle">+ evidence</text>
+    </g>
+    <g transform="translate(828 110)">
+      <rect class="card" width="104" height="82" rx="14"/>
+      <circle cx="52" cy="28" r="17" fill="#0f766e"/>
+      <text class="flow-num" x="52" y="33" text-anchor="middle">4</text>
+      <text class="flow-label" x="52" y="60" text-anchor="middle">Auditor</text>
+      <text class="flow-label" x="52" y="75" text-anchor="middle">review</text>
+    </g>
+    <g transform="translate(1084 110)">
+      <rect class="card" width="104" height="82" rx="14"/>
+      <circle cx="52" cy="28" r="17" fill="#0f766e"/>
+      <text class="flow-num" x="52" y="33" text-anchor="middle">5</text>
+      <text class="flow-label" x="52" y="60" text-anchor="middle">Draft &amp;</text>
+      <text class="flow-label" x="52" y="75" text-anchor="middle">approve issues</text>
+    </g>
+    <g transform="translate(1340 110)">
+      <rect class="card" width="104" height="82" rx="14"/>
+      <circle cx="52" cy="28" r="17" fill="#0f766e"/>
+      <text class="flow-num" x="52" y="33" text-anchor="middle">6</text>
+      <text class="flow-label" x="52" y="60" text-anchor="middle">Generate</text>
+      <text class="flow-label" x="52" y="75" text-anchor="middle">DOCX</text>
+    </g>
+  </g>
+
+  <!-- Screen 1 -->
+  <g transform="translate(60 235)" aria-label="Combined projects status, project detail, live progress, and document readiness wireframe">
+    <rect class="panel" width="720" height="400" rx="16"/>
+    <path class="topbar" d="M16,0 H704 A16,16 0 0 1 720,16 V54 H0 V16 A16,16 0 0 1 16,0 Z"/>
+    <text class="screen-title" x="22" y="25">01  Projects &amp; Status</text>
+    <text class="screen-subtitle" x="22" y="43">Project list, detail, live progress and readiness in one workspace</text>
+
+    <rect class="sidebar" x="0" y="54" width="235" height="346" rx="0"/>
+    <rect class="button" x="14" y="70" width="207" height="30" rx="7"/>
+    <text class="button-text" x="118" y="89" text-anchor="middle">+ Select local folder (POC)</text>
+    <text class="h3" x="16" y="124">Projects</text>
+
+    <rect class="card-ready" x="14" y="136" width="207" height="82" rx="9"/>
+    <text class="small-bold" x="28" y="158">Lumina Grand PDPA Audit</text>
+    <text class="status-warn" x="28" y="178">● PROCESSING</text>
+    <text class="small" x="28" y="196">Parsing AWP...</text>
+    <text class="small" x="28" y="211">Updated just now</text>
+
+    <rect class="card" x="14" y="230" width="207" height="74" rx="9"/>
+    <text class="small-bold" x="28" y="251">Orion Access Audit</text>
+    <text class="status-ok" x="28" y="271">READY TO EXPORT</text>
+    <text class="small" x="28" y="290">3 issues approved</text>
+
+    <text class="small" x="16" y="330">Click a project to open details,</text>
+    <text class="small" x="16" y="346">edit metadata or continue its flow.</text>
+
+    <text class="h2" x="255" y="86">Lumina Grand PDPA Audit</text>
+    <text class="small" x="255" y="107">Local folder (POC) · FY2024 · 12 files</text>
+    <rect class="button-secondary" x="610" y="70" width="85" height="28" rx="7"/>
+    <text class="button-text-secondary" x="652" y="88" text-anchor="middle">Edit details</text>
+
+    <rect class="card-warn" x="255" y="122" width="440" height="132" rx="9"/>
+    <text class="h3" x="273" y="145">Processing project</text>
+    <text class="status-ok" x="273" y="167">✓ Reading APM</text>
+    <text class="status-ok" x="273" y="187">✓ Reading AWP</text>
+    <text class="status-warn" x="273" y="207">● Parsing Process Understanding...</text>
+    <text class="small" x="273" y="225">Next: Extracting observations · Matching evidence</text>
+    <rect class="sidebar" x="273" y="234" width="350" height="8" rx="4"/>
+    <rect class="button" x="273" y="234" width="218" height="8" rx="4"/>
+    <text class="small" x="681" y="242" text-anchor="end">8/12 files · 01:42</text>
+
+    <text class="h3" x="255" y="281">Document readiness</text>
+    <line class="divider" x1="255" y1="291" x2="695" y2="291"/>
+    <text class="body" x="269" y="313">APM — Approved Planning Memo</text>
+    <text class="status-ok" x="678" y="313" text-anchor="end">READY</text>
+    <text class="body" x="269" y="335">AWP — Approved Work Program</text>
+    <text class="status-ok" x="678" y="335" text-anchor="end">READY</text>
+    <text class="body" x="269" y="357">Process Understanding</text>
+    <text class="status-warn" x="678" y="357" text-anchor="end">PARSING</text>
+
+    <rect class="button-secondary" x="482" y="366" width="105" height="25" rx="7"/>
+    <text class="button-text-secondary" x="535" y="383" text-anchor="middle">Run in background</text>
+    <rect class="button-disabled" x="595" y="366" width="100" height="25" rx="7"/>
+    <text class="button-text-disabled" x="645" y="383" text-anchor="middle">Generate DOCX</text>
+  </g>
+
+  <!-- Screen 2 -->
+  <g transform="translate(820 235)" aria-label="Observation inbox wireframe">
+    <rect class="panel" width="720" height="400" rx="16"/>
+    <path class="topbar" d="M16,0 H704 A16,16 0 0 1 720,16 V54 H0 V16 A16,16 0 0 1 16,0 Z"/>
+    <text class="screen-title" x="22" y="25">02  Observation Inbox</text>
+    <text class="screen-subtitle" x="22" y="43">AI finds observations and sources; auditor confirms</text>
+
+    <text class="h2" x="24" y="86">Suggested observations</text>
+    <text class="small" x="24" y="106">3 extracted · 1 needs evidence · 0 approved</text>
+    <rect class="button" x="562" y="70" width="132" height="30" rx="7"/>
+    <text class="button-text" x="628" y="89" text-anchor="middle">+ Add observation</text>
+
+    <rect class="card-ready" x="24" y="124" width="672" height="105" rx="10"/>
+    <text class="h3" x="42" y="150">Profile-level permissions were not included in the annual access review</text>
+    <rect class="chip" x="42" y="165" width="105" height="22" rx="11"/>
+    <text class="small-bold" x="94" y="180" text-anchor="middle">AI EXTRACTED</text>
+    <rect class="chip-blue" x="156" y="165" width="129" height="22" rx="11"/>
+    <text class="small-bold" x="220" y="180" text-anchor="middle">ACCESS CONTROL</text>
+    <text class="small" x="42" y="208">AI-matched: Process Understanding E.1.2 · Access Rights.xlsx / IA-Edit</text>
+    <rect class="button-secondary" x="560" y="190" width="64" height="25" rx="6"/>
+    <text class="button-text-secondary" x="592" y="207" text-anchor="middle">Review</text>
+    <rect class="button" x="632" y="190" width="50" height="25" rx="6"/>
+    <text class="button-text" x="657" y="207" text-anchor="middle">Approve</text>
+
+    <rect class="card-warn" x="24" y="243" width="672" height="105" rx="10"/>
+    <text class="h3" x="42" y="269">Three staff may retain permissions beyond their job responsibilities</text>
+    <rect class="chip-warn" x="42" y="284" width="124" height="22" rx="11"/>
+    <text class="small-bold" x="104" y="299" text-anchor="middle">NEEDS EVIDENCE</text>
+    <text class="small" x="42" y="327">Missing: source establishing current job responsibilities</text>
+    <rect class="button-secondary" x="552" y="309" width="130" height="25" rx="6"/>
+    <text class="button-text-secondary" x="617" y="326" text-anchor="middle">Resolve evidence</text>
+
+    <rect class="button-secondary" x="24" y="362" width="150" height="27" rx="7"/>
+    <text class="button-text-secondary" x="99" y="380" text-anchor="middle">Merge selected</text>
+    <rect class="button" x="516" y="362" width="180" height="27" rx="7"/>
+    <text class="button-text" x="606" y="380" text-anchor="middle">Validate observations</text>
+  </g>
+
+  <!-- Screen 3 -->
+  <g transform="translate(60 675)" aria-label="Add observation wireframe">
+    <rect class="panel" width="720" height="435" rx="16"/>
+    <path class="topbar" d="M16,0 H704 A16,16 0 0 1 720,16 V54 H0 V16 A16,16 0 0 1 16,0 Z"/>
+    <text class="screen-title" x="22" y="25">03  Add Observation</text>
+    <text class="screen-subtitle" x="22" y="43">One required input; AI searches all project artefacts</text>
+
+    <text class="h3" x="26" y="86">What did you find? *</text>
+    <rect class="input" x="26" y="98" width="668" height="77" rx="8"/>
+    <text class="body" x="42" y="122">The annual Salesforce access review checked user-to-profile assignments,</text>
+    <text class="body" x="42" y="141">but did not assess permissions contained within each profile.</text>
+    <text class="small" x="42" y="161">Natural language is accepted. The system will structure it before drafting.</text>
+
+    <text class="h3" x="26" y="204">Evidence hints — optional</text>
+    <rect class="input" x="26" y="216" width="668" height="73" rx="8"/>
+    <text class="body" x="42" y="239">AI will search every relevant parsed artefact automatically.</text>
+    <text class="small" x="42" y="260">Add a file hint only if you already know a likely source.</text>
+    <rect class="button-secondary" x="540" y="231" width="136" height="27" rx="7"/>
+    <text class="button-text-secondary" x="608" y="249" text-anchor="middle">+ Add file hint</text>
+
+    <rect class="card" x="26" y="307" width="668" height="54" rx="8"/>
+    <text class="h3" x="42" y="330">Optional details</text>
+    <text class="small" x="42" y="349">Expected control · Impact · Root cause · Recommendation · Entity · System</text>
+    <text class="small-bold" x="662" y="339" text-anchor="end">Expand ▾</text>
+
+    <rect class="button-secondary" x="452" y="382" width="92" height="30" rx="7"/>
+    <text class="button-text-secondary" x="498" y="401" text-anchor="middle">Save draft</text>
+    <rect class="button" x="554" y="382" width="140" height="30" rx="7"/>
+    <text class="button-text" x="624" y="401" text-anchor="middle">Find evidence &amp; validate</text>
+  </g>
+
+  <!-- Screen 4 -->
+  <g transform="translate(820 675)" aria-label="Draft review wireframe">
+    <rect class="panel" width="720" height="435" rx="16"/>
+    <path class="topbar" d="M16,0 H704 A16,16 0 0 1 720,16 V54 H0 V16 A16,16 0 0 1 16,0 Z"/>
+    <text class="screen-title" x="22" y="25">04  Draft Issue Review</text>
+    <text class="screen-subtitle" x="22" y="43">Edit final wording while keeping evidence visible</text>
+
+    <rect class="sidebar" x="0" y="54" width="175" height="381"/>
+    <text class="h3" x="18" y="82">3 draft issues</text>
+    <rect class="chip" x="14" y="97" width="146" height="45" rx="7"/>
+    <text class="small-bold" x="26" y="115">ISSUE-001</text>
+    <text class="small" x="26" y="132">Access review</text>
+    <text class="nav" x="22" y="168">ISSUE-002 · Permissions</text>
+    <text class="nav" x="22" y="198">ISSUE-003 · Training</text>
+
+    <text class="h3" x="196" y="82">Draft content</text>
+    <text class="small" x="196" y="101">Source observations: OBS-001</text>
+    <rect class="input" x="196" y="114" width="300" height="54" rx="7"/>
+    <text class="small-bold" x="210" y="133">Title</text>
+    <text class="body" x="210" y="153">Access rights review should be enhanced</text>
+
+    <rect class="input" x="196" y="179" width="300" height="118" rx="7"/>
+    <text class="small-bold" x="210" y="198">Finding</text>
+    <text class="body" x="210" y="218">The annual review validated assigned</text>
+    <text class="body" x="210" y="236">profiles but did not assess permissions</text>
+    <text class="body" x="210" y="254">contained within those profiles...</text>
+    <text class="small" x="210" y="279">Editable · AI changes are tracked</text>
+
+    <text class="h3" x="520" y="82">Evidence</text>
+    <rect class="card-ready" x="520" y="96" width="176" height="89" rx="8"/>
+    <text class="small-bold" x="534" y="117">Process Understanding</text>
+    <text class="small" x="534" y="136">Section E.1.2</text>
+    <text class="small" x="534" y="155">“review covered users</text>
+    <text class="small" x="534" y="170">and profiles...”</text>
+    <rect class="card" x="520" y="196" width="176" height="76" rx="8"/>
+    <text class="small-bold" x="534" y="217">Access Rights.xlsx</text>
+    <text class="small" x="534" y="236">Sheet IA-Edit</text>
+    <text class="small" x="534" y="253">Open source ↗</text>
+
+    <rect class="card-ready" x="196" y="315" width="500" height="49" rx="8"/>
+    <text class="status-ok" x="212" y="337">✓ In scope   ✓ Evidence supported   ✓ Citations valid</text>
+    <text class="small" x="212" y="354">Suggested risk: Medium · Auditor confirmation required</text>
+
+    <rect class="button-secondary" x="408" y="386" width="88" height="30" rx="7"/>
+    <text class="button-text-secondary" x="452" y="405" text-anchor="middle">Save edits</text>
+    <rect class="button-secondary" x="506" y="386" width="88" height="30" rx="7"/>
+    <text class="button-text-secondary" x="550" y="405" text-anchor="middle">Approve</text>
+    <rect class="button" x="604" y="386" width="92" height="30" rx="7"/>
+    <text class="button-text" x="650" y="405" text-anchor="middle">Generate DOCX</text>
+  </g>
+
+  <text class="small" x="60" y="1150">Wireframe purpose: communicate workflow and information hierarchy; not final visual design.</text>
+</svg>
