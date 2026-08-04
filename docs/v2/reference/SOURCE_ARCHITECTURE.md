@@ -1,8 +1,9 @@
 # Operation Report Jedi — Source Code Architecture
 
-> **Trạng thái:** POC backend đã triển khai + target evolution  
-> **Phạm vi:** Backend, frontend, integration boundaries và deployment evolution  
-> **Liên quan:** [Architecture v2](README.md) · [Frontend Flow](FRONTEND_FLOW.md)
+> **Cập nhật:** 03/08/2026
+> **Trạng thái:** Tài liệu tham khảo về source boundaries và target evolution; xem `status/` để biết tiến độ
+> **Phạm vi:** Backend, frontend, integration boundaries và deployment evolution
+> **Liên quan:** [Target Architecture](TARGET_ARCHITECTURE.md) · [Frontend Status](../status/FRONTEND.md)
 
 ## 1. Kết luận thiết kế
 
@@ -49,13 +50,19 @@ Business modules chỉ gọi Port. Adapter cụ thể được chọn tại comp
 
 ## 2. Current state của repository
 
-Source hiện tại có FastAPI entrypoint và compatibility CLI dùng chung một
-application pipeline. Project API đã có persistent metadata và local storage:
+Source hiện tại đã có Vue frontend, Nginx reverse proxy, FastAPI API, PostgreSQL
+persistence, Alembic migration và compatibility CLI dùng chung application
+pipeline:
 
 ```text
-backend/api.py → Project routes → ProjectManager → AuditPipeline
-                      ↓                ↓
-                PostgreSQL/SQLite  Local storage
+Browser → Vue 3 SPA → Nginx /api proxy → FastAPI project routes
+                                             ↓
+                                      ProjectManager
+                                        ↙          ↘
+                                  PostgreSQL      Local storage
+                                             ↓
+                                        AuditPipeline
+
 backend/main.py ─────────────────────────────→ AuditPipeline
 
 AuditPipeline
@@ -84,14 +91,17 @@ Các module hiện có:
 | `backend/app/pipeline/prompts/*` | Prompt use cases | Prompt/schema/version chưa được quản lý như artefact |
 | `backend/app/pipeline/render.py` | DOCX rendering | Chưa có object-storage/output adapter |
 | `backend/app/pipeline/versioning.py` | Tạo `Output/v0.N` | Không an toàn khi có concurrent workers |
+| `frontend/src/*` | Vue Projects workspace, upload, SSE progress và download | POC single-screen; coverage tự động còn mỏng |
+| `frontend/nginx.conf` | Phục vụ SPA, proxy API/SSE và giới hạn upload 1 GB | Chưa có TLS/auth ở POC |
+| `backend/alembic/*` | Initial PostgreSQL/SQLite schema revision `20260729_01` | Mới có initial migration |
+| `compose.yaml` | PostgreSQL 16, backend và frontend | POC single-host |
 
 Repository chưa có:
 
-- External job queue/worker.
+- External job queue/worker và durable stage recovery.
 - Authentication/authorization.
-- Frontend Vue/Vite application implementation; repository mới chỉ có module/test skeleton và design assets.
 - SharePoint hoặc AWS adapter.
-- Alembic migration history; POC đang auto-create schema.
+- Production observability, secrets management và deployment hardening.
 
 FastAPI không gọi `backend/main.py`; API và CLI cùng dùng `AuditPipeline`.
 
@@ -596,70 +606,66 @@ Secrets production lấy từ AWS Secrets Manager/Parameter Store hoặc workloa
 
 ## 6. Frontend architecture
 
-### 6.1 Technology baseline
+### 6.1 Technology baseline hiện tại
 
-- Vue 3 + TypeScript.
-- Vite.
-- Vue Router.
-- `@tanstack/vue-query` cho server state/cache/refetch.
-- Pinia chỉ cho auth/session và UI state cục bộ.
-- Generated OpenAPI client/types.
-- SSE client có reconnect và `Last-Event-ID`.
-- Component library/theme tokens dùng qua `shared/ui`.
+Frontend POC đang dùng:
 
-Không lưu canonical project/run/observation state đồng thời trong Vue Query và Pinia.
+- Vue 3 + TypeScript + Vite.
+- Vue Composition API và state cục bộ trong Projects workspace.
+- Typed API client viết tay theo backend contract.
+- `XMLHttpRequest` cho upload progress.
+- Native `EventSource` cho SSE và reconnect.
+- CSS/theme nội bộ, không dùng component library.
+- Vitest cho unit test và Nginx cho production static serving/reverse proxy.
 
-### 6.2 Cấu trúc source đề xuất
+Vue Router, `@tanstack/vue-query`, Pinia và generated OpenAPI client là target
+khi frontend có thêm nhiều màn hình hoặc auth; chúng chưa phải dependency của
+POC hiện tại. Khi bổ sung, không lưu cùng một canonical server state đồng thời
+trong query cache và Pinia.
+
+### 6.2 Cấu trúc source hiện tại
 
 ```text
 frontend/
+├── design/logo.png
+├── Dockerfile
+├── nginx.conf
 ├── package.json
 ├── vite.config.ts
 ├── src/
-│   ├── app/
-│   │   ├── main.ts
-│   │   ├── router.ts
-│   │   ├── providers.ts
-│   │   ├── config.ts
-│   │   └── layouts/
-│   ├── modules/
-│   │   ├── projects/
-│   │   │   ├── pages/
-│   │   │   ├── components/
-│   │   │   ├── api/
-│   │   │   ├── queries/
-│   │   │   ├── composables/
-│   │   │   ├── model/
-│   │   │   └── routes.ts
-│   │   ├── observations/
-│   │   ├── issues/
-│   │   └── outputs/
-│   ├── shared/
-│   │   ├── api/
-│   │   │   ├── generated/
-│   │   │   ├── http-client.ts
-│   │   │   └── progress-client.ts
-│   │   ├── auth/
-│   │   ├── ui/
-│   │   ├── validation/
-│   │   ├── formatting/
-│   │   └── types/
-│   └── assets/
+│   ├── main.ts
+│   ├── app/App.vue
+│   ├── assets/
+│   │   ├── cdl-logo.png
+│   │   └── styles.css
+│   ├── modules/projects/
+│   │   ├── ProjectsWorkspace.vue
+│   │   └── UploadProjectDialog.vue
+│   └── shared/
+│       ├── api/projects.ts
+│       ├── formatting/date.ts
+│       └── types/projects.ts
 └── tests/
-    ├── unit/
-    ├── component/
-    └── e2e/
+    ├── setup.ts
+    └── unit/
 ```
 
-Rule import:
+POC giữ source nhỏ và trực tiếp. Khi thêm Observation, Issue Review, auth và
+output history, source tiếp tục mở rộng theo feature module với import rule:
 
 ```text
 app → modules → shared
 ```
 
-Một module không import private component/store của module khác. Cross-module navigation dùng route name; cross-module data dùng API contract hoặc public module facade.
+Một module không import private component/store của module khác. Cross-module
+data dùng API contract hoặc public module facade.
 
-### 6.3 Routes và màn hình
+### 6.3 Màn hình và route
+
+POC hiện tại là single-page workspace ở route gốc do Nginx/Vite phục vụ. Project
+được chọn trong list và detail hiển thị bên phải; chưa dùng Vue Router.
+
+Nếu mở rộng sau POC, route target là:
 
 ```text
 /projects
@@ -669,43 +675,35 @@ Một module không import private component/store của module khác. Cross-mod
 /projects/:projectId/outputs
 ```
 
-`/projects/:projectId` là workspace gộp:
+`/projects/:projectId` vẫn là workspace gộp metadata, status, live progress và
+contextual action. Documents không cần là top-level screen riêng.
 
-- Project metadata.
-- Status/current activity.
-- Live progress.
-- Document readiness.
-- Contextual primary action.
+### 6.4 Frontend state hiện tại
 
-Documents không phải top-level screen riêng.
-
-### 6.4 Frontend state
-
-| State | Owner |
+| State | Owner POC |
 |---|---|
-| Project/run/observations/issues/outputs | Vue Query từ backend |
-| Logged-in principal và auth lifecycle | Auth provider/Pinia |
-| Modal open, selected rows, filters, unsaved form | Component hoặc Pinia UI store |
-| Run progress snapshot | Vue Query |
-| Live progress events | SSE composable merge vào query cache |
-| Export eligibility | Backend `allowed_actions`, không tự suy luận ở UI |
+| Project list và selected project | `ProjectsWorkspace.vue` từ backend snapshot |
+| Upload dialog/files/progress | `UploadProjectDialog.vue` |
+| Live progress events | Native SSE merge vào project state |
+| Kết nối/reconnect status | Projects workspace |
+| Export eligibility | Backend `allowed_actions`; UI không tự suy luận |
 
-Progress composable:
+Luồng progress hiện tại:
 
-```ts
-useRunProgress(runId)
-  → fetch snapshot
-  → connect SSE with lastEventId
-  → deduplicate by eventId
-  → update current activity and bounded activity log
-  → mark stale connection
-  → exponential reconnect
-  → polling fallback
+```text
+fetch project snapshot/events
+  → connect SSE từ event cuối
+  → deduplicate theo event ID
+  → cập nhật current activity/timeline
+  → refresh snapshot khi terminal
+  → reconnect khi mất kết nối
 ```
 
-Khi SSE disconnect, workflow không được coi là failed. UI hiển thị `Reconnecting`; chỉ backend terminal event/state mới chuyển job sang `FAILED`.
+Khi SSE disconnect, workflow không được coi là failed. UI hiển thị trạng thái
+kết nối; chỉ backend terminal state mới chuyển project sang `FAILED`. Polling
+fallback nâng cao và query cache là phần tiến hóa sau POC.
 
-### 6.5 Project source UI
+### 6.5 Project source UI (target evolution)
 
 UI phụ thuộc vào capability trả từ backend:
 
@@ -728,7 +726,7 @@ ProjectSourceSelector
 
 SharePoint token, Graph paging và publish logic thuộc backend adapter. Frontend chỉ nhận picker configuration/reference phù hợp với auth design đã duyệt.
 
-### 6.6 Form và concurrency
+### 6.6 Form và concurrency (target evolution)
 
 - Form dùng server DTO + explicit edit model; không bind trực tiếp generated response object.
 - PATCH gửi `row_version`/ETag nội bộ.
@@ -859,51 +857,32 @@ OpenTelemetry có thể được cắm ở API/worker adapter layer; domain khô
 | Workflow | Retry/resume/idempotency tại từng checkpoint |
 | API contract | OpenAPI schema, error codes, authorization |
 | Frontend component | Status/action rendering và progress reconnect |
-| E2E | Local upload → review → Generate DOCX → download/publish |
+| E2E | POC: local upload → progress → DOCX download; target: review → generate → publish |
 
 Không gọi live LLM trong default unit test. Dùng recorded/fake structured responses; chỉ chạy provider smoke test ở pipeline riêng.
 
-## 12. Migration từ source hiện tại
+## 12. Evolution sequence tham khảo
 
-### Bước 1 — Đóng gói logic hiện có sau ports
+Thứ tự dependency kỹ thuật đề xuất:
 
-- `backend/app/pipeline/parsers.py` → parser adapters + `ParserRegistry`.
-- `backend/app/pipeline/llm.py` → `AnthropicLlmAdapter`.
-- `backend/app/pipeline/render.py` → `PythonDocxRendererAdapter`.
-- `backend/app/pipeline/validate.py` → validation policies/application stage.
-- `backend/app/pipeline/prompts/*` → versioned `PromptRegistry`.
+```text
+POC modular monolith
+  → provider/storage ports rõ ràng
+  → idempotent stage handlers + durable checkpoints
+  → queue/worker + production persistence adapters
+  → identity, SharePoint và operational controls
+  → Observation/Issue Review product modules
+```
 
-Chưa đổi thuật toán; chỉ tách I/O/provider dependency.
+Nguyên tắc migration:
 
-### Bước 2 — Tách orchestration khỏi CLI
+- API và CLI tiếp tục dùng chung application workflow.
+- Thay adapter mà không fork business pipeline theo environment.
+- Mỗi bước phải giữ regression fixtures cho parsing, drafting và rendering.
+- Chỉ tách microservice khi có nhu cầu scale/deploy độc lập đã được đo lường.
 
-- Tạo `AuditRunWorkflow`.
-- Mỗi bước thành stage handler idempotent.
-- CLI trở thành một inbound adapter gọi cùng application command như API.
-- Progress print được thay bằng `RunEvent`.
-
-### Bước 3 — Thêm persistence và API
-
-- PostgreSQL schema/migrations.
-- Repository + Unit of Work.
-- FastAPI routes và OpenAPI.
-- Local upload, local object store và in-process queue adapters.
-
-### Bước 4 — Xây frontend
-
-- Project list/workspace.
-- Live progress SSE + polling fallback.
-- Observation/issue review.
-- Output history/download.
-
-### Bước 5 — Production adapters
-
-- S3, SQS, RDS và Bedrock adapters.
-- Entra ID.
-- SharePoint Graph source/publish adapter.
-- Transactional outbox, multi-instance SSE notification và operational alarms.
-
-Mỗi bước phải giữ regression fixtures để xác nhận draft/render hiện có không thay đổi ngoài ý muốn.
+Trạng thái và acceptance criteria được quản lý duy nhất tại
+[Delivery Roadmap](../roadmap/README.md).
 
 ## 13. Anti-patterns cần tránh
 
