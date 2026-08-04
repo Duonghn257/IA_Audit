@@ -18,7 +18,7 @@ import type {
   ProjectStatus,
   UploadProjectInput,
 } from "../../shared/types/projects"
-import UploadProjectDialog from "./UploadProjectDialog.vue"
+import ProjectSetupWizard from "./ProjectSetupWizard.vue"
 
 const projects = ref<AuditProject[]>([])
 const selectedId = ref<string | null>(null)
@@ -416,10 +416,11 @@ function clearError(): void {
       <footer class="page-footer"><span>City Developments Limited · Internal Audit</span><span>AI-assisted drafting · Auditor review required</span></footer>
     </main>
 
-    <UploadProjectDialog
+    <ProjectSetupWizard
       :open="uploadOpen"
       :uploading="uploading"
       :progress="uploadProgress"
+      :error="pageError"
       @close="uploadOpen = false"
       @submit="handleUpload"
     />

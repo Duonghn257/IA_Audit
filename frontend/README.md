@@ -1,10 +1,11 @@
 # Frontend
 
 Vue 3 + Vite frontend for the Operation Report Jedi POC. It implements the
-single Projects workflow defined in `docs/v2/FRONTEND_FLOW.md`:
+single Projects workflow defined in `docs/v2/status/FRONTEND.md`:
 
 ```text
-Select folder → upload → live SSE progress → completed/failed → download DOCX
+Project & artefacts → enter/import auditor inputs → review → upload
+  → live SSE progress → completed/failed → download DOCX
 ```
 
 ## Run with the full POC stack
@@ -40,5 +41,13 @@ npm run test
 npm run build
 ```
 
-The folder picker requires `sample_issues.json` at the selected folder root,
-matching the current backend POC contract.
+`sample_issues.json` is no longer required in the selected folder. The setup
+wizard accepts manual auditor input or JSON import, then generates the root file
+for the existing backend POC contract after the user reviews the issues.
+
+Reference selectors mirror the backend parser and show only direct `.docx`,
+`.pdf`, and `.xlsx` files from `APM`, `AWP`, `Guidelines`, `Process SOP`,
+`Process Understanding`, and `Samples`. Hidden files such as `.DS_Store`,
+temporary Word files, `Output/**`, nested generated files, and unsupported
+extensions are excluded from the selectors. This UI filter does not delete or
+remove files from the original folder upload.

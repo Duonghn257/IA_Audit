@@ -44,4 +44,14 @@ export interface ApiErrorBody {
 export interface UploadProjectInput {
   name: string
   files: File[]
+  auditorIssues: AuditorIssueInput[]
+}
+
+export interface AuditorIssueInput {
+  title_hint: string
+  observed_gap: string
+  evidence_summary: string
+  evidence_refs: string[]
+  sop_refs: string[]
+  risk_category: string
 }

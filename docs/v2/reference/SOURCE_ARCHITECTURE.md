@@ -640,8 +640,9 @@ frontend/
 │   │   └── styles.css
 │   ├── modules/projects/
 │   │   ├── ProjectsWorkspace.vue
-│   │   └── UploadProjectDialog.vue
+│   │   └── ProjectSetupWizard.vue
 │   └── shared/
+│       ├── auditor-inputs.ts
 │       ├── api/projects.ts
 │       ├── formatting/date.ts
 │       └── types/projects.ts
@@ -683,7 +684,7 @@ contextual action. Documents không cần là top-level screen riêng.
 | State | Owner POC |
 |---|---|
 | Project list và selected project | `ProjectsWorkspace.vue` từ backend snapshot |
-| Upload dialog/files/progress | `UploadProjectDialog.vue` |
+| Project setup/files/auditor inputs/progress | `ProjectSetupWizard.vue` |
 | Live progress events | Native SSE merge vào project state |
 | Kết nối/reconnect status | Projects workspace |
 | Export eligibility | Backend `allowed_actions`; UI không tự suy luận |

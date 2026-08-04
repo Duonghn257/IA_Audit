@@ -166,21 +166,16 @@ The current POC revision is:
 
 ### 6. Upload a project
 
-Open `http://127.0.0.1:3010`, select **New project**, and choose the complete
-audit project folder.
+Open `http://127.0.0.1:3010`, select **New project**, and complete the setup
+wizard:
 
-The selected folder must contain `sample_issues.json` at its root:
+1. Enter the project name and choose the complete audit artefact folder.
+2. Enter auditor issues manually or import a JSON file.
+3. Review the issues and start processing.
 
-```text
-my-audit-project/
-├── sample_issues.json       # Required by the current POC pipeline
-├── APM/
-├── AWP/
-├── Guidelines/
-├── Process SOP/
-├── Process Understanding/
-└── Samples/
-```
+The artefact folder does not need to contain `sample_issues.json`. If one is
+present, the wizard can load it into the editable form. On submission, the
+frontend generates the reviewed `sample_issues.json` for the backend pipeline.
 
 The frontend preserves every file's relative path. After the upload, it shows
 live progress using Server-Sent Events (SSE). A completed project provides a
@@ -444,6 +439,9 @@ folder uploads.
 
 - [Backend API and storage details](backend/README.md)
 - [Frontend development guide](frontend/README.md)
-- [Frontend POC flow](docs/v2/FRONTEND_FLOW.md)
-- [Implementation handoff](docs/v2/IMPLEMENTATION_HANDOFF.md)
-- [Source architecture](docs/v2/SOURCE_CODE_ARCHITECTURE.md)
+- [Delivery documentation hub](docs/v2/README.md)
+- [Frontend status](docs/v2/status/FRONTEND.md)
+- [Backend status](docs/v2/status/BACKEND.md)
+- [Infrastructure status](docs/v2/status/INFRASTRUCTURE.md)
+- [Delivery roadmap](docs/v2/roadmap/README.md)
+- [Source architecture reference](docs/v2/reference/SOURCE_ARCHITECTURE.md)

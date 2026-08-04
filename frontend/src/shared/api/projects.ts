@@ -4,6 +4,7 @@ import type {
   ProjectEvent,
   UploadProjectInput,
 } from "../types/projects"
+import { serialiseAuditorIssues } from "../auditor-inputs"
 
 const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "/api/v1").replace(/\/$/, "")
 
@@ -80,10 +81,26 @@ export function uploadProject(
   const form = new FormData()
   if (input.name.trim()) form.append("name", input.name.trim())
 
-  for (const file of input.files) {
+  const folderRoot = input.files
+    .map((file) => (file.webkitRelativePath || "").split("/").filter(Boolean)[0])
+    .find(Boolean)
+  const projectFiles = input.files.filter((file) => !isRootAuditorInput(file))
+
+  for (const file of projectFiles) {
     form.append("files", file)
     form.append("relative_paths", file.webkitRelativePath || file.name)
   }
+
+  const auditorInput = new File(
+    [serialiseAuditorIssues(input.auditorIssues)],
+    "sample_issues.json",
+    { type: "application/json" },
+  )
+  form.append("files", auditorInput)
+  form.append(
+    "relative_paths",
+    folderRoot ? `${folderRoot}/sample_issues.json` : "sample_issues.json",
+  )
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
@@ -117,4 +134,10 @@ export function uploadProject(
     })
     xhr.send(form)
   })
+}
+
+function isRootAuditorInput(file: File): boolean {
+  if (file.name !== "sample_issues.json") return false
+  const parts = (file.webkitRelativePath || file.name).split("/").filter(Boolean)
+  return parts.length <= 2
 }

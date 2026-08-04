@@ -1,17 +1,21 @@
 # Trạng thái Frontend
 
-> Xác minh gần nhất: 03/08/2026
+> Xác minh gần nhất: 04/08/2026
 > Trạng thái bàn giao: POC đã triển khai
 > Source of truth: `frontend/src/`
 
 ## Kết quả hiện tại
 
-Vue app đã hỗ trợ đầy đủ happy path của POC: chọn local audit folder, theo dõi
-xử lý và tải DOCX. App chạy qua Nginx trong Docker Compose, dùng logo CDL và
-giao diện sáng với màu nhấn cam/đen.
+Vue app đã hỗ trợ đầy đủ happy path của POC: chọn local audit folder, nhập hoặc
+import auditor inputs, review trước khi chạy, theo dõi xử lý và tải DOCX. App
+chạy qua Nginx trong Docker Compose, dùng logo CDL và giao diện sáng với màu
+nhấn cam/đen.
 
 ```text
-Chọn folder → Validate → Upload → Live processing → Completed/Failed → Download
+Project & artefacts
+  → Nhập tay/import auditor inputs
+  → Review & upload
+  → Live processing → Completed/Failed → Download
 ```
 
 ## Checklist chức năng
@@ -21,8 +25,11 @@ Chọn folder → Validate → Upload → Live processing → Completed/Failed �
 | Projects workspace | Đã xong | `frontend/src/modules/projects/ProjectsWorkspace.vue` |
 | Logo công ty và theme | Đã xong | `frontend/src/assets/cdl-logo.png`, `styles.css` |
 | Responsive desktop/mobile | Đã xong | `frontend/src/assets/styles.css` |
-| Chọn local folder | Đã xong | `webkitdirectory` trong `UploadProjectDialog.vue` |
-| Validate `sample_issues.json` ở root | Đã xong | `hasRootIssuesFile` trong upload dialog |
+| Chọn local folder | Đã xong | `webkitdirectory` trong `ProjectSetupWizard.vue` |
+| Nhập tay nhiều auditor issues | Đã xong | Issue navigator và editor trong setup wizard |
+| Import/validate JSON | Đã xong | `shared/auditor-inputs.ts` |
+| Lọc source artefacts cho reference | Đã xong | Chỉ hiện `.docx/.pdf/.xlsx` trong sáu folder backend parse; loại hidden, `Output` và generated files |
+| Review trước khi chạy | Đã xong | Bước `Review & run` trong setup wizard |
 | Multipart upload giữ relative path | Đã xong | `frontend/src/shared/api/projects.ts` |
 | Browser upload progress | Đã xong | `XMLHttpRequest.upload` progress |
 | Project list và detail | Đã xong | Projects workspace |
@@ -31,7 +38,7 @@ Chọn folder → Validate → Upload → Live processing → Completed/Failed �
 | API error và correlation ID | Đã xong | `ApiClientError` và error banner |
 | Download DOCX | Đã xong | Theo backend action `DOWNLOAD_OUTPUT` |
 | Browser E2E trong repository | Chưa làm | Mới có Playwright smoke check tạm thời |
-| Observation/Issue Review UI | Deferred | Ngoài POC hiện tại |
+| Auditor input review UI | Đã xong | Review các seed issues trước khi gọi drafting pipeline |
 | Authentication UI | Chưa làm | Phụ thuộc backend identity design |
 
 ## Bố cục UI
@@ -42,10 +49,10 @@ POC cố ý giữ một workspace duy nhất:
 2. Summary cards theo trạng thái project.
 3. Project list bên trái.
 4. Status và activity của project được chọn bên phải.
-5. Upload dialog để chọn folder và đặt tên project.
+5. Setup wizard ba bước: Project & Artefacts → Auditor Inputs → Review & Run.
 
-POC không có Observation Inbox, Draft Issue Review hoặc approval gates. Đây là
-các flow của target product sau POC.
+POC có review gate cho auditor-provided seed issues, nhưng chưa có AI discovery,
+Candidate Issue Register hoặc review draft sau khi AI sinh.
 
 Design reference: [frontend wireframes](../diagrams/frontend-wireframes.svg).
 
@@ -77,10 +84,10 @@ không phải lỗi hỏng file.
 | Kiểm tra | Kết quả |
 |---|---|
 | `npm run typecheck` | Pass |
-| `npm test` | 2 tests pass |
+| `npm test` | 8 tests pass |
 | `npm run build` | Pass |
-| Production JS bundle | 87.76 kB, 33.87 kB gzip |
-| Production CSS bundle | 20.38 kB, 5.32 kB gzip |
+| Production JS bundle | 104.25 kB, 38.28 kB gzip |
+| Production CSS bundle | 31.88 kB, 7.25 kB gzip |
 | Frontend container health | Healthy |
 | API health qua Nginx | HTTP 200 |
 | Playwright smoke tạm thời | Page load, dialog và folder selection pass |
