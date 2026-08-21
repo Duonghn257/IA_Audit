@@ -113,8 +113,8 @@ GET  /api/v1/health
 ```
 
 The SSE endpoint emits pipeline progress suitable for the frontend thinking
-view. The old `/api/v1/runs` endpoints remain temporarily for compatibility;
-their state is still in memory.
+view. The legacy `/api/v1/runs*` HTTP endpoints have been removed; use the
+project/version/job APIs documented in `docs/v2/api_documentation.md`.
 
 ## Database and storage
 

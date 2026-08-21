@@ -1,90 +1,522 @@
-# API Documentation — IA Audit MVP v2
+# UAT API Contract — Operation Report Jedi
 
+> Contract version: `1.0.0-uat`
 > Base URL: `/api/v1`  
-> OpenAPI khi chạy ứng dụng: `/openapi.json`  
+> Content type mặc định: `application/json`
+> OpenAPI runtime: `/openapi.json`
 > Swagger UI: `/docs`  
-> Cập nhật: 13/08/2026
+> Cập nhật: 21/08/2026
 
-## 1. Phạm vi và trạng thái
+## 1. Mục đích và phạm vi
 
-| Ký hiệu | Ý nghĩa |
+Tài liệu này là contract đích giữa frontend, backend và worker cho bản UAT. Mỗi
+API đều nêu rõ mục đích, input, output, HTTP status và lỗi nghiệp vụ quan trọng.
+
+Contract bao phủ toàn bộ luồng UAT:
+
+1. upload folder vào staging;
+2. validate và tạo project cùng version `v0.1`;
+3. xem project và lịch sử version;
+4. chạy AI discovery;
+5. review, sửa và disposition issue;
+6. chạy Audit để tạo DOCX;
+7. theo dõi background job;
+8. tải output theo version.
+
+UAT không có API để sửa source file sau khi project được tạo, chỉnh nội dung
+DOCX trên web, cancel job, merge/split issue hoặc publish report ra hệ thống
+ngoài.
+
+### 1.1 Trạng thái triển khai
+
+| Trạng thái | Ý nghĩa |
 |---|---|
-| ✅ | Đã có API và xử lý backend |
-| 🟡 | Contract/API đã có, nhưng chưa thể chạy trọn flow do thiếu S3 hoặc AI worker |
-| ⏳ | API cũ của POC, vẫn giữ để không làm hỏng flow hiện tại |
+| **READY** | Route và xử lý backend hiện đã có |
+| **STUB** | Route đã xuất hiện trong OpenAPI nhưng hiện trả `501` |
+| **TARGET** | Contract UAT đã chốt trong tài liệu, backend còn phải hoàn thiện |
+| **BRIDGE** | API tạm thời mà frontend UAT hiện tại còn dùng; không dùng cho client mới |
 
-Các endpoint 🟡 hiện trả HTTP `501 Not Implemented` cùng mã lỗi rõ ràng. Chúng được khai báo trước để frontend có thể thống nhất contract mà không giả vờ rằng backend đã xử lý được.
+Các section 2–10 mô tả contract UAT đích. Section 11 ghi rõ chênh lệch giữa
+contract đích với runtime hiện tại và các API bridge cần retire.
 
 ## 2. Quy ước chung
 
-### Error response
+### 2.1 Header
+
+| Header | Bắt buộc | Áp dụng | Ý nghĩa |
+|---|---:|---|---|
+| `Accept: application/json` | Có | API JSON | Định dạng response |
+| `Content-Type: application/json` | Có | Request JSON | Định dạng request |
+| `X-Correlation-ID` | Không | Mọi request | Client truyền ID để trace; backend tự sinh nếu thiếu và luôn trả lại |
+| `Idempotency-Key` | Có | Command tạo/promote/start/retry | Retry cùng key không được tạo resource hoặc job trùng |
+| `Last-Event-ID` | Không | SSE | Resume stream sau event cuối client đã nhận |
+
+Internal UAT chưa có application login/RBAC. Môi trường phải được bảo vệ bằng
+corporate VPN hoặc approved IP range. Đây không phải quyết định cho production.
+
+### 2.2 ID, thời gian và JSON
+
+- JSON dùng `snake_case`.
+- ID là opaque string; client không parse hoặc tự sinh ID server resource.
+- Timestamp là ISO 8601 UTC, ví dụ `2026-08-21T08:15:30Z`.
+- Field optional không có giá trị trả `null`; không dùng chuỗi rỗng thay
+  `null`.
+- Client phải bỏ qua response field chưa biết để hỗ trợ additive change.
+- Breaking change cần base path mới hoặc major contract version mới.
+
+### 2.3 Error response
+
+Mọi lỗi nghiệp vụ do API kiểm soát dùng một shape:
 
 ```json
 {
   "error": {
-    "code": "VERSION_NOT_FOUND",
-    "message": "Version not found: version-id",
-    "details": {},
-    "correlation_id": "request-correlation-id"
+    "code": "ROW_VERSION_CONFLICT",
+    "message": "Issue was changed by another request. Reload it and retry.",
+    "details": {
+      "current_row_version": 8
+    },
+    "correlation_id": "6d7849f8-1bd8-46a3-aa52-a5950e3b15cb"
   }
 }
 ```
 
-Client có thể gửi `X-Correlation-ID`; nếu không gửi, API tự sinh và trả lại header này.
+| HTTP | Ý nghĩa |
+|---:|---|
+| `400` | Request không parse được hoặc protocol không hợp lệ |
+| `404` | Resource không tồn tại hoặc không thuộc parent trong URL |
+| `409` | Duplicate, stale version hoặc workflow conflict |
+| `410` | Artefact từng tồn tại nhưng đã hết retention |
+| `413` | Upload vượt tổng dung lượng cho phép |
+| `415` | File/content type không được hỗ trợ |
+| `422` | Request đúng JSON nhưng vi phạm validation/business rule |
+| `429` | Rate/concurrency limit |
+| `500` | Lỗi backend không dự kiến |
+| `501` | Route contract đã publish nhưng capability chưa được cấu hình/implement |
+| `503` | Dependency tạm thời không sẵn sàng |
 
-### Optimistic concurrency cho issue
+### 2.4 Pagination
 
-Mỗi issue có `row_version`. Khi sửa hoặc disposition, frontend phải gửi lại giá trị đang thấy. Nếu dữ liệu đã bị request khác sửa trước đó, API trả:
-
-```text
-409 ROW_VERSION_CONFLICT
-```
-
-Frontend cần reload issue rồi cho người dùng thực hiện lại thay đổi.
-
-### ID và thời gian
-
-- ID là string UUID do backend sinh.
-- Thời gian trả về theo ISO 8601 UTC.
-- `project version` là workspace độc lập như `v0.1`, `v0.2`; chỉnh một version không làm thay đổi version khác.
-
-## 3. Danh sách endpoint
-
-### System
-
-| Trạng thái | Method | Path | Mục đích |
-|---|---|---|---|
-| ✅ | `GET` | `/health` | Health check |
-
-### Upload và tạo project theo flow v2
-
-| Trạng thái | Method | Path | Mục đích |
-|---|---|---|---|
-| 🟡 | `POST` | `/upload-sessions` | Tạo staging session và presigned upload URLs |
-| 🟡 | `GET` | `/upload-sessions/{session_id}` | Xem trạng thái upload/validation |
-| 🟡 | `POST` | `/upload-sessions/{session_id}/validate` | Validate folder đã upload |
-| 🟡 | `POST` | `/upload-sessions/{session_id}/projects` | Promote snapshot, tạo project và `v0.1` |
-| 🟡 | `DELETE` | `/upload-sessions/{session_id}` | Hủy staging session |
-
-Các API trên hiện trả `501 S3_STORAGE_NOT_CONFIGURED`. Chưa có bucket nên backend chưa thể tạo presigned URL hoặc promote source snapshot. Không có malware scan trong MVP theo quyết định hiện tại.
-
-Tên project phải unique. Hai project được phép có toàn bộ file giống nhau nếu tên khác nhau; backend không deduplicate project theo hash nội dung.
-
-Request dự kiến để tạo upload session:
+Endpoint list lớn dùng cursor:
 
 ```json
 {
+  "items": [],
+  "page": {
+    "next_cursor": null,
+    "has_more": false
+  }
+}
+```
+
+Query chung:
+
+| Field | Type | Default | Rule |
+|---|---|---:|---|
+| `limit` | integer | `50` | `1..100` |
+| `cursor` | string | `null` | Opaque cursor do server trả |
+
+List version và output của một project dự kiến nhỏ nên trả array, không
+paginate trong UAT.
+
+### 2.5 Optimistic concurrency
+
+Mỗi issue có `row_version`. `PATCH issue` và `disposition` phải gửi đúng
+`row_version` client đang thấy. Nếu issue đã bị request khác sửa, API trả
+`409 ROW_VERSION_CONFLICT`; client reload issue rồi cho người dùng thử lại.
+
+Mỗi thay đổi issue làm tăng:
+
+- `issue.row_version` của issue đó;
+- `project_version.issue_revision` của workspace.
+
+Audit request phải gửi `issue_revision` để đóng băng đúng issue set.
+
+### 2.6 Background command và idempotency
+
+Discovery, Audit, validate và retry không chờ xử lý hoàn tất. API trả `202`
+cùng job/session snapshot. Client poll hoặc dùng SSE để theo dõi.
+
+Với cùng scope và `Idempotency-Key`:
+
+- nếu command trước đã được nhận, trả lại resource/job đã tạo;
+- không tạo duplicate version, job hoặc output;
+- một active job tương đương có thể trả `409 ACTIVE_JOB_CONFLICT` kèm
+  `job_id` đang chạy.
+
+## 3. Danh mục API UAT đích
+
+### 3.1 System và intake
+
+| Status | Method | Path | Mục đích | Success |
+|---|---|---|---|---|
+| READY | `GET` | `/health` | Kiểm tra API process | `200 HealthResponse` |
+| STUB | `POST` | `/upload-sessions` | Tạo staging session và upload instructions | `201 UploadSession` |
+| STUB | `GET` | `/upload-sessions/{session_id}` | Đọc trạng thái, tree và validation report | `200 UploadSession` |
+| STUB | `POST` | `/upload-sessions/{session_id}/validate` | Validate/revalidate file đã upload | `202 UploadSession` |
+| STUB | `POST` | `/upload-sessions/{session_id}/projects` | Promote snapshot, tạo project và `v0.1` | `201 ProjectDetail` |
+| STUB | `DELETE` | `/upload-sessions/{session_id}` | Hủy staging chưa promote | `204` |
+
+### 3.2 Project, version và issue workspace
+
+| Status | Method | Path | Mục đích | Success |
+|---|---|---|---|---|
+| TARGET | `GET` | `/projects` | List/search project | `200 ProjectPage` |
+| TARGET | `GET` | `/projects/{project_id}` | Project detail và source/version summary | `200 ProjectDetail` |
+| READY | `GET` | `/projects/{project_id}/versions` | List audit version | `200 ProjectVersion[]` |
+| READY | `POST` | `/projects/{project_id}/versions` | Tạo `v0.N` từ base version | `201 ProjectVersion` |
+| READY | `GET` | `/projects/{project_id}/versions/{version_id}` | Workspace snapshot của version | `200 ProjectVersion` |
+| TARGET | `GET` | `/projects/{project_id}/versions/{version_id}/issues` | List/filter issue | `200 IssuePage` |
+| READY | `POST` | `/projects/{project_id}/versions/{version_id}/issues` | Tạo manual issue | `201 Issue` |
+| READY | `GET` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}` | Đọc một issue | `200 Issue` |
+| TARGET | `PATCH` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}` | Autosave business fields | `200 Issue` |
+| TARGET | `POST` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}/disposition` | Ghi quyết định review | `200 Issue` |
+
+### 3.3 Discovery, Audit, job và output
+
+| Status | Method | Path | Mục đích | Success |
+|---|---|---|---|---|
+| STUB | `POST` | `/projects/{project_id}/versions/{version_id}/discovery-jobs` | Tìm AI candidate issues | `202 Job` |
+| STUB | `POST` | `/projects/{project_id}/versions/{version_id}/audit-jobs` | Freeze input và tạo Issue Log DOCX | `202 Job` |
+| READY | `GET` | `/jobs/{job_id}` | Đọc job snapshot/progress | `200 Job` |
+| READY | `GET` | `/jobs/{job_id}/events` | Poll durable events | `200 JobEvent[]` |
+| READY | `GET` | `/jobs/{job_id}/events/stream` | Stream durable events bằng SSE | `200 text/event-stream` |
+| TARGET | `POST` | `/jobs/{job_id}/retry` | Retry terminal job an toàn | `202 Job` |
+| READY | `GET` | `/projects/{project_id}/versions/{version_id}/outputs` | List immutable output revisions | `200 OutputRevision[]` |
+| TARGET | `GET` | `/projects/{project_id}/versions/{version_id}/outputs/{output_id}/download` | Tải DOCX thuộc đúng project/version | `200 DOCX` hoặc `302` |
+
+## 4. Shared data contracts
+
+### 4.1 UploadSession
+
+```json
+{
+  "session_id": "upl_01J5...",
+  "state": "READY_TO_CREATE",
+  "created_at": "2026-08-21T08:00:00Z",
+  "expires_at": "2026-08-22T08:00:00Z",
   "files": [
     {
-      "relative_path": "Evidence/access-review.xlsx",
+      "file_id": "fil_01J5...",
+      "relative_path": "AWP/Approved Work Programme.pdf",
       "size_bytes": 152340,
-      "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      "content_type": "application/pdf",
+      "upload_status": "UPLOADED",
+      "logical_role": "SCOPE",
+      "readability_status": "READABLE"
+    }
+  ],
+  "validation_report": {
+    "valid": true,
+    "errors": [],
+    "warnings": [],
+    "role_summary": {
+      "SCOPE": 1,
+      "RISK_CONTEXT": 1,
+      "EVIDENCE": 4,
+      "CRITERIA": 2
+    }
+  },
+  "allowed_actions": ["CREATE_PROJECT", "DISCARD"],
+  "action_reasons": {}
+}
+```
+
+Upload session states:
+`UPLOADING | VALIDATING | READY_TO_CREATE | INVALID | PROMOTED | EXPIRED`.
+
+Logical roles:
+`SCOPE | RISK_CONTEXT | EVIDENCE | CRITERIA | CONTEXT`.
+
+Validation message:
+
+| Field | Type | Ý nghĩa |
+|---|---|---|
+| `code` | string | Stable machine-readable code |
+| `message` | string | Nội dung cho người dùng |
+| `file_id` | string/null | File liên quan |
+| `relative_path` | string/null | Path để UI highlight |
+| `blocking` | boolean | Có chặn Create project không |
+| `details` | object | Dữ liệu bổ sung có cấu trúc |
+
+### 4.2 ProjectDetail
+
+```json
+{
+  "project_id": "prj_01J5...",
+  "name": "FY2026 Access Review",
+  "state": "READY_FOR_DISCOVERY",
+  "source_snapshot": {
+    "snapshot_id": "src_01J5...",
+    "document_count": 8,
+    "total_size_bytes": 4823130,
+    "created_at": "2026-08-21T08:10:00Z"
+  },
+  "current_version_id": "ver_01J5...",
+  "version_count": 1,
+  "latest_version": {
+    "version_id": "ver_01J5...",
+    "label": "v0.1",
+    "state": "DRAFT"
+  },
+  "allowed_actions": ["VIEW_VERSIONS", "CREATE_VERSION"],
+  "action_reasons": {
+    "RUN_DISCOVERY": "Select a project version first."
+  },
+  "created_at": "2026-08-21T08:10:00Z",
+  "updated_at": "2026-08-21T08:10:00Z"
+}
+```
+
+Project states:
+`READY_FOR_DISCOVERY | CANDIDATES_AVAILABLE | OUTPUT_AVAILABLE`.
+
+### 4.3 ProjectVersion
+
+```json
+{
+  "version_id": "ver_01J5...",
+  "project_id": "prj_01J5...",
+  "sequence_no": 2,
+  "label": "v0.2",
+  "base_version_id": "ver_01J4...",
+  "state": "STALE_OUTPUT",
+  "issue_revision": 12,
+  "issue_counts": {
+    "DRAFT": 1,
+    "APPROVED": 3,
+    "NEEDS_EVIDENCE": 1
+  },
+  "latest_job": null,
+  "output_available": true,
+  "allowed_actions": [
+    "CREATE_VERSION",
+    "VIEW_ISSUES",
+    "EDIT_ISSUES",
+    "RUN_DISCOVERY",
+    "RUN_AUDIT",
+    "DOWNLOAD_OUTPUT"
+  ],
+  "created_at": "2026-08-21T09:00:00Z",
+  "updated_at": "2026-08-21T09:30:00Z"
+}
+```
+
+Version states:
+`DRAFT | CANDIDATES_READY | AUDITING | DOCX_READY | STALE_OUTPUT`.
+
+Tạo version copy issue và source references từ base version nhưng không copy
+DOCX. Sequence được cấp ở cấp project: `v0.1`, `v0.2`, ...
+
+### 4.4 Issue và SourceReference
+
+```json
+{
+  "issue_id": "iss_01J5...",
+  "project_version_id": "ver_01J5...",
+  "origin": "AI_DISCOVERED",
+  "status": "READY_FOR_REVIEW",
+  "observed_gap": "Quarterly access review evidence was not retained.",
+  "title_hint": "Access review evidence retention",
+  "evidence_summary": "One of four quarterly review packages was unavailable.",
+  "risk_category": "Access Management",
+  "confidence": 0.86,
+  "validation_flags": [],
+  "row_version": 3,
+  "source_refs": [
+    {
+      "reference_id": "ref_01J5...",
+      "ref_kind": "EVIDENCE",
+      "document_id": "doc_01J5...",
+      "unit_id": "unit_01J5...",
+      "location": {
+        "sheet": "Access Review",
+        "range": "A1:B12"
+      },
+      "quote": "Review completed by control owner"
+    }
+  ],
+  "created_at": "2026-08-21T09:05:00Z",
+  "updated_at": "2026-08-21T09:20:00Z"
+}
+```
+
+| Field | Rule |
+|---|---|
+| `origin` | `AI_DISCOVERED | MANUAL`; không đổi sau khi tạo |
+| `status` | `DRAFT | READY_FOR_REVIEW | APPROVED | NEEDS_EVIDENCE | REJECTED | OUT_OF_SCOPE` |
+| `observed_gap` | Required, không được blank |
+| `title_hint` | AI candidate required; manual draft optional |
+| `evidence_summary` | AI candidate required; manual issue optional |
+| `risk_category` | Optional |
+| `confidence` | `0..1`, AI-owned; manual issue có thể `null` |
+| `source_refs` | AI candidate cần ít nhất một `EVIDENCE` và một `CRITERIA`; manual optional |
+| `location` | Object theo loại file: page/section hoặc sheet/range |
+| `quote` | Optional short excerpt; không thay thế document provenance |
+
+### 4.5 Job và JobEvent
+
+```json
+{
+  "job_id": "job_01J5...",
+  "project_id": "prj_01J5...",
+  "project_version_id": "ver_01J5...",
+  "job_type": "DISCOVERY",
+  "state": "RUNNING",
+  "stage": "PARSING",
+  "completed_items": 3,
+  "total_items": 10,
+  "current_message": "Parsing source documents",
+  "attempt_count": 1,
+  "correlation_id": "6d7849f8-1bd8-46a3-aa52-a5950e3b15cb",
+  "created_at": "2026-08-21T09:00:00Z",
+  "updated_at": "2026-08-21T09:01:00Z",
+  "heartbeat_at": "2026-08-21T09:01:00Z",
+  "error": null
+}
+```
+
+Job type: `DISCOVERY | AUDIT`.
+
+Job state: `QUEUED | RUNNING | SUCCEEDED | INCOMPLETE | FAILED`.
+
+```json
+{
+  "event_id": 17,
+  "job_id": "job_01J5...",
+  "stage": "PARSING",
+  "message": "Parsed 3 of 10 documents",
+  "completed_items": 3,
+  "total_items": 10,
+  "warning": false,
+  "occurred_at": "2026-08-21T09:01:00Z"
+}
+```
+
+### 4.6 OutputRevision
+
+```json
+{
+  "output_id": "out_01J5...",
+  "project_version_id": "ver_01J5...",
+  "ordinal": 2,
+  "status": "CURRENT",
+  "filename": "FY2026 Access Review_Issue Log v0.2.docx",
+  "content_hash": "sha256:4cd8...",
+  "created_at": "2026-08-21T10:00:00Z",
+  "download_url": "/api/v1/projects/prj_01J5.../versions/ver_01J5.../outputs/out_01J5.../download"
+}
+```
+
+Output status: `CURRENT | STALE`. Mỗi Audit thành công tạo một immutable
+revision; re-Audit không ghi đè file cũ.
+
+## 5. System API
+
+### 5.1 GET `/health`
+
+**Mục đích:** liveness check cho load balancer, deployment và smoke test.
+
+**Input:** không có path/query/body.
+
+**Output — `200`:**
+
+```json
+{
+  "status": "ok",
+  "service": "operation-report-jedi-backend",
+  "version": "2.0.0"
+}
+```
+
+Health không kiểm tra sâu database/storage/AI. Nếu cần readiness, bổ sung route
+riêng thay vì thay đổi semantics của route này.
+
+## 6. Upload và project intake APIs
+
+### 6.1 POST `/upload-sessions`
+
+**Mục đích:** khai báo folder manifest và nhận upload instruction cho từng file.
+Request này chưa tạo project và chưa chạy discovery.
+
+**Headers:** `Idempotency-Key` required.
+
+**Input:**
+
+```json
+{
+  "root_folder_name": "FY2026 Access Review",
+  "files": [
+    {
+      "client_file_id": "browser-1",
+      "relative_path": "AWP/Approved Work Programme.pdf",
+      "size_bytes": 152340,
+      "content_type": "application/pdf",
+      "modified_at": "2026-08-20T03:00:00Z"
     }
   ]
 }
 ```
 
-Request tạo project sau validation:
+| Field | Required | Rule |
+|---|---:|---|
+| `root_folder_name` | Có | `1..255` chars |
+| `files` | Có | `1..20` files |
+| `client_file_id` | Có | Unique trong request; dùng để map response |
+| `relative_path` | Có | POSIX relative path; không absolute, `..`, duplicate hoặc control chars |
+| `size_bytes` | Có | `> 0`; tổng folder tối đa `100,000,000` bytes |
+| `content_type` | Có | MIME của `.docx`, `.pdf` hoặc `.xlsx` |
+| `modified_at` | Không | Metadata từ browser; không dùng làm integrity check |
+
+**Output — `201 UploadSession`:** session state `UPLOADING`; mỗi file có
+`file_id`, presigned `upload_url`, HTTP method, required headers và expiry.
+Upload URL là private short-lived URL, không phải API application route.
+
+**Lỗi chính:** `409 IDEMPOTENCY_CONFLICT`, `413 FOLDER_TOO_LARGE`,
+`415 UNSUPPORTED_FILE_TYPE`, `422 INVALID_UPLOAD_MANIFEST`.
+
+### 6.2 GET `/upload-sessions/{session_id}`
+
+**Mục đích:** phục hồi wizard sau reload và đọc upload/validation status.
+
+**Input:** path `session_id`.
+
+**Output — `200 UploadSession`:** file tree, per-file status,
+`validation_report`, `allowed_actions` và `action_reasons`.
+
+**Lỗi chính:** `404 UPLOAD_SESSION_NOT_FOUND`, `410 UPLOAD_SESSION_EXPIRED`.
+
+### 6.3 POST `/upload-sessions/{session_id}/validate`
+
+**Mục đích:** kiểm tra authoritative server-side sau khi client upload đủ file.
+
+**Headers:** `Idempotency-Key` required.
+
+**Input:** path `session_id`; không có body.
+
+**Output — `202 UploadSession`:** state `VALIDATING`. Client dùng GET session
+để lấy terminal result `READY_TO_CREATE` hoặc `INVALID`.
+
+Validation gồm:
+
+- path, số lượng, tổng dung lượng và allowlist;
+- file missing/size mismatch/hash;
+- corrupt, encrypted/password-protected hoặc zero-byte;
+- mapping logical role và required roles;
+- readability bằng parser;
+- warning khi user upload `Guidelines`/`Samples` vì UAT dùng central assets.
+
+**Lỗi chính:** `404 UPLOAD_SESSION_NOT_FOUND`,
+`409 UPLOAD_INCOMPLETE`, `410 UPLOAD_SESSION_EXPIRED`.
+
+### 6.4 POST `/upload-sessions/{session_id}/projects`
+
+**Mục đích:** promote một valid staging snapshot thành immutable project và tạo
+version đầu tiên `v0.1` trong cùng transaction.
+
+**Headers:** `Idempotency-Key` required.
+
+**Input:**
 
 ```json
 {
@@ -92,57 +524,124 @@ Request tạo project sau validation:
 }
 ```
 
-### Project/version workspace
+**Output — `201 ProjectDetail`:** project state `READY_FOR_DISCOVERY`,
+source snapshot và `latest_version.label = "v0.1"`.
 
-| Trạng thái | Method | Path | Mục đích |
-|---|---|---|---|
-| ✅ | `GET` | `/projects/{project_id}/versions` | Danh sách version của project |
-| ✅ | `POST` | `/projects/{project_id}/versions` | Tạo `v0.N` mới từ một base version |
-| ✅ | `GET` | `/projects/{project_id}/versions/{version_id}` | Chi tiết workspace của version |
+**Lỗi chính:** `404 UPLOAD_SESSION_NOT_FOUND`,
+`409 DUPLICATE_PROJECT_NAME`, `409 SESSION_ALREADY_PROMOTED`,
+`422 SESSION_NOT_READY`.
 
-Request tạo version mới:
+Hai project có thể có cùng file content nếu tên khác nhau. Backend không
+deduplicate project theo content hash.
+
+### 6.5 DELETE `/upload-sessions/{session_id}`
+
+**Mục đích:** hủy staging chưa promote và schedule xoá object tạm.
+
+**Input:** path `session_id`.
+
+**Output — `204`:** không có body. Lặp lại DELETE có thể trả `204`.
+
+**Lỗi chính:** `409 SESSION_ALREADY_PROMOTED`. Project/source snapshot đã
+promote không thể bị xóa bằng route này.
+
+## 7. Project và version APIs
+
+### 7.1 GET `/projects`
+
+**Mục đích:** project list/search cho landing page.
+
+**Input query:**
+
+| Field | Type | Default | Ý nghĩa |
+|---|---|---:|---|
+| `search` | string | null | Tìm case-insensitive theo name |
+| `state` | ProjectState | null | Filter state |
+| `limit` | integer | 50 | Page size |
+| `cursor` | string | null | Cursor trang tiếp theo |
+
+**Output — `200 ProjectPage`:** `items` là ProjectDetail rút gọn (không có
+full source tree), kèm `page`.
+
+### 7.2 GET `/projects/{project_id}`
+
+**Mục đích:** tải project header, immutable source summary và version summary.
+
+**Input:** path `project_id`.
+
+**Output — `200 ProjectDetail`.**
+
+**Lỗi chính:** `404 PROJECT_NOT_FOUND`.
+
+### 7.3 GET `/projects/{project_id}/versions`
+
+**Mục đích:** hiển thị version history và cho người dùng quay lại version cũ.
+
+**Input:** path `project_id`.
+
+**Output — `200 ProjectVersion[]`:** sort `sequence_no DESC`.
+
+**Lỗi chính:** `404 PROJECT_NOT_FOUND`.
+
+### 7.4 POST `/projects/{project_id}/versions`
+
+**Mục đích:** xử lý nút **+ New audit**; tạo next `v0.N` từ base đang chọn.
+
+**Headers:** `Idempotency-Key` required.
+
+**Input:**
 
 ```json
 {
-  "base_version_id": "8b59171f-37df-44f3-b1a1-6238f12403c1"
+  "base_version_id": "ver_01J4..."
 }
 ```
 
-Backend copy issue và source reference từ base version, nhưng không copy output DOCX. Số version được cấp theo project: `v0.1`, `v0.2`, `v0.3`, ...
+**Output — `201 ProjectVersion`.**
 
-Response rút gọn:
+**Lỗi chính:** `404 PROJECT_NOT_FOUND`, `404 VERSION_NOT_FOUND`,
+`409 IDEMPOTENCY_CONFLICT`, `422 INVALID_BASE_VERSION`.
 
-```json
-{
-  "version_id": "f325ca32-98a6-46bb-8ad4-b7231828de98",
-  "project_id": "project-id",
-  "sequence_no": 2,
-  "label": "v0.2",
-  "base_version_id": "8b59171f-37df-44f3-b1a1-6238f12403c1",
-  "state": "DRAFT",
-  "issue_revision": 4,
-  "issue_counts": {"APPROVED": 2, "DRAFT": 1},
-  "latest_job": null,
-  "output_available": false,
-  "allowed_actions": ["CREATE_VERSION", "VIEW_ISSUES", "EDIT_ISSUES", "RUN_DISCOVERY", "RUN_AUDIT"],
-  "created_at": "2026-08-13T04:00:00Z",
-  "updated_at": "2026-08-13T04:00:00Z"
-}
-```
+### 7.5 GET `/projects/{project_id}/versions/{version_id}`
 
-Lưu ý: các API này đã chạy trên database, nhưng project/v0.1 mới chưa thể được tạo từ public flow v2 cho tới khi S3 upload được cấu hình.
+**Mục đích:** tải workspace state, issue revision, counts, latest job và allowed
+actions của một version.
 
-### Issue register
+**Input:** path `project_id`, `version_id`.
 
-| Trạng thái | Method | Path | Mục đích |
-|---|---|---|---|
-| ✅ | `GET` | `/projects/{project_id}/versions/{version_id}/issues` | Danh sách issue |
-| ✅ | `POST` | `/projects/{project_id}/versions/{version_id}/issues` | Tạo manual issue |
-| ✅ | `GET` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}` | Chi tiết issue |
-| ✅ | `PUT` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}` | Cập nhật toàn bộ editable fields |
-| ✅ | `POST` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}/disposition` | Duyệt/từ chối/yêu cầu evidence/out of scope |
+**Output — `200 ProjectVersion`.**
 
-Manual issue chỉ bắt buộc `observed_gap`:
+**Lỗi chính:** `404 PROJECT_NOT_FOUND`, `404 VERSION_NOT_FOUND`. Một
+`version_id` tồn tại nhưng không thuộc `project_id` vẫn trả
+`VERSION_NOT_FOUND` để tránh cross-project disclosure.
+
+## 8. Issue APIs
+
+### 8.1 GET `/projects/{project_id}/versions/{version_id}/issues`
+
+**Mục đích:** tải Issue Register.
+
+**Input query:**
+
+| Field | Type | Default | Ý nghĩa |
+|---|---|---:|---|
+| `status` | IssueStatus[] | null | Filter một hoặc nhiều status |
+| `origin` | IssueOrigin | null | `AI_DISCOVERED` hoặc `MANUAL` |
+| `search` | string | null | Tìm trong title/gap |
+| `limit` | integer | 50 | Page size |
+| `cursor` | string | null | Cursor trang tiếp theo |
+
+**Output — `200 IssuePage`:** `items: Issue[]` và `page`.
+
+**Lỗi chính:** `404 PROJECT_NOT_FOUND`, `404 VERSION_NOT_FOUND`.
+
+### 8.2 POST `/projects/{project_id}/versions/{version_id}/issues`
+
+**Mục đích:** tạo manual issue trong selected version.
+
+**Headers:** `Idempotency-Key` required.
+
+**Input:**
 
 ```json
 {
@@ -155,55 +654,101 @@ Manual issue chỉ bắt buộc `observed_gap`:
 }
 ```
 
-Request cập nhật issue gửi đầy đủ editable fields và `row_version`:
+`observed_gap` là field duy nhất bắt buộc cho manual issue. Backend luôn set
+`origin = MANUAL`; client không được gửi `origin`, `confidence`,
+`validation_flags` hoặc ID/timestamp.
+
+**Output — `201 Issue`:** `row_version = 1`.
+
+**Lỗi chính:** `404 VERSION_NOT_FOUND`, `409 INVALID_STATE`,
+`422 INVALID_ISSUE`.
+
+### 8.3 GET `/projects/{project_id}/versions/{version_id}/issues/{issue_id}`
+
+**Mục đích:** lấy issue cùng normalized source references.
+
+**Input:** ba path IDs.
+
+**Output — `200 Issue`.**
+
+**Lỗi chính:** `404 PROJECT_NOT_FOUND`, `404 VERSION_NOT_FOUND`,
+`404 ISSUE_NOT_FOUND`.
+
+### 8.4 PATCH `/projects/{project_id}/versions/{version_id}/issues/{issue_id}`
+
+**Mục đích:** autosave business fields mà không gửi lại toàn bộ resource.
+
+**Input:**
 
 ```json
 {
-  "row_version": 1,
+  "row_version": 3,
   "observed_gap": "Quarterly access review evidence was incomplete and not retained.",
-  "title_hint": "Access review evidence retention",
   "evidence_summary": "One of four quarterly reviews was unavailable.",
   "risk_category": "Access Management",
-  "status": "READY_FOR_REVIEW",
-  "confidence": null,
-  "validation_flags": [],
-  "source_refs": []
+  "source_refs": [
+    {
+      "ref_kind": "EVIDENCE",
+      "document_id": "doc_01J5...",
+      "unit_id": null,
+      "location": {
+        "sheet": "Access Review",
+        "range": "A1:B12"
+      },
+      "quote": "Review completed by control owner"
+    }
+  ]
 }
 ```
 
-Disposition hợp lệ:
+| Field | Required | Rule |
+|---|---:|---|
+| `row_version` | Có | Integer `>= 1` |
+| Business field cần đổi | Có ít nhất một | `title_hint`, `observed_gap`, `evidence_summary`, `risk_category`, `source_refs` |
+| `status` | Không | Dùng disposition API cho review decision |
+| `origin`, `confidence`, `validation_flags` | Không được gửi | System/AI-owned |
+
+**Output — `200 Issue`:** issue mới với `row_version + 1`.
+
+**Lỗi chính:** `404 ISSUE_NOT_FOUND`, `409 ROW_VERSION_CONFLICT`,
+`409 INVALID_STATE`, `422 INVALID_ISSUE`.
+
+Nếu version đang có output `CURRENT`, edit issue giữ file cũ nhưng chuyển
+output sang `STALE` và version sang `STALE_OUTPUT`.
+
+### 8.5 POST `/projects/{project_id}/versions/{version_id}/issues/{issue_id}/disposition`
+
+**Mục đích:** ghi quyết định review tách khỏi autosave nội dung.
+
+**Input:**
 
 ```json
 {
-  "row_version": 2,
-  "status": "APPROVED"
+  "row_version": 4,
+  "status": "APPROVED",
+  "comment": "Evidence and criteria verified."
 }
 ```
 
-Các giá trị disposition được chấp nhận: `APPROVED`, `NEEDS_EVIDENCE`, `REJECTED`, `OUT_OF_SCOPE`.
+Status hợp lệ cho disposition:
+`APPROVED | NEEDS_EVIDENCE | REJECTED | OUT_OF_SCOPE`.
+`comment` optional trong UAT contract và được lưu vào audit trail.
 
-Source reference có cấu trúc:
+**Output — `200 Issue`:** issue sau transition và row version mới.
 
-```json
-{
-  "ref_kind": "EVIDENCE",
-  "document_id": "document-id",
-  "unit_id": null,
-  "location": {"sheet": "Access Review", "range": "A1:B12"},
-  "quote": "Review completed by control owner"
-}
-```
+**Lỗi chính:** `404 ISSUE_NOT_FOUND`, `409 ROW_VERSION_CONFLICT`,
+`409 INVALID_STATE`, `422 INVALID_DISPOSITION`.
 
-Manual issue có thể không có source reference. Quy tắc AI candidate phải có cả `EVIDENCE` và `CRITERIA` sẽ được enforce khi AI discovery được implement.
+## 9. Discovery, Audit và job APIs
 
-### AI discovery và Audit
+### 9.1 POST `/projects/{project_id}/versions/{version_id}/discovery-jobs`
 
-| Trạng thái | Method | Path | Mục đích |
-|---|---|---|---|
-| 🟡 | `POST` | `/projects/{project_id}/versions/{version_id}/discovery-jobs` | Tìm AI candidate issues |
-| 🟡 | `POST` | `/projects/{project_id}/versions/{version_id}/audit-jobs` | Freeze issue revision, tạo Issue Log DOCX |
+**Mục đích:** enqueue AI discovery trên immutable source snapshot của project và
+ghi candidates vào selected version. Discovery không tạo version mới.
 
-Discovery request:
+**Headers:** `Idempotency-Key` required.
+
+**Input:**
 
 ```json
 {
@@ -211,96 +756,276 @@ Discovery request:
 }
 ```
 
-Audit request:
+`force = false` tái sử dụng result/job tương đương nếu có. `force = true`
+chỉ được phép khi không có discovery active và phải tạo attempt có audit trail.
+
+**Output — `202 Job`:** `job_type = DISCOVERY`, thường state `QUEUED`.
+
+**Lỗi chính:** `404 VERSION_NOT_FOUND`, `409 ACTIVE_JOB_CONFLICT`,
+`409 INVALID_STATE`, `422 SOURCE_NOT_READY`,
+`501 AI_PIPELINE_NOT_IMPLEMENTED` trong runtime hiện tại.
+
+### 9.2 POST `/projects/{project_id}/versions/{version_id}/audit-jobs`
+
+**Mục đích:** preflight, freeze issue input snapshot và enqueue draft/validate/
+render DOCX cho chính version hiện tại. Audit không tăng version.
+
+**Headers:** `Idempotency-Key` required.
+
+**Input:**
 
 ```json
 {
-  "issue_revision": 4
+  "issue_revision": 12
 }
 ```
 
-Hiện cả hai endpoint trả `501 AI_PIPELINE_NOT_IMPLEMENTED`. Contract response thành công dự kiến là `202` và một `JobResponse`. JSON schema chi tiết cho các AI artefact nội bộ như scope map, facts, candidate output và coverage matrix vẫn cần thảo luận riêng; chúng chưa được coi là contract đã chốt.
+Preflight tối thiểu:
 
-### Durable jobs
+- request revision trùng current `issue_revision`;
+- không có Audit active tương đương;
+- issue được chọn cho output có `observed_gap`;
+- AI candidate có evidence summary, `EVIDENCE` ref và `CRITERIA` ref;
+- manual issue vẫn được phép thiếu refs theo UAT policy;
+- central guideline/template version đang active.
 
-| Trạng thái | Method | Path | Mục đích |
-|---|---|---|---|
-| ✅ | `GET` | `/jobs/{job_id}` | Lấy trạng thái/progress job |
-| ✅ | `GET` | `/jobs/{job_id}/events?after_event_id=0` | Poll progress events |
-| ✅ | `GET` | `/jobs/{job_id}/events/stream?after_event_id=0` | Nhận progress bằng SSE |
-| 🟡 | `POST` | `/jobs/{job_id}/retry` | Đưa terminal job về queue |
+**Output — `202 Job`:** `job_type = AUDIT`, state `QUEUED`.
 
-Repository và API job đã có persistence, event, lease/heartbeat và retry state. Chưa có process worker riêng để claim và thực thi AI job, vì vậy retry chỉ có ý nghĩa sau khi worker được implement.
+**Lỗi chính:** `404 VERSION_NOT_FOUND`, `409 ACTIVE_JOB_CONFLICT`,
+`409 INVALID_STATE`, `422 ISSUE_REVISION_STALE`,
+`422 AUDIT_PREFLIGHT_FAILED`, `501 AI_PIPELINE_NOT_IMPLEMENTED`.
 
-Job response:
+### 9.3 GET `/jobs/{job_id}`
+
+**Mục đích:** phục hồi progress sau reload/reconnect.
+
+**Input:** path `job_id`.
+
+**Output — `200 Job`.**
+
+**Lỗi chính:** `404 JOB_NOT_FOUND`.
+
+### 9.4 GET `/jobs/{job_id}/events`
+
+**Mục đích:** polling fallback khi SSE không dùng được.
+
+**Input query:** `after_event_id` integer `>= 0`, default `0`.
+
+**Output — `200 JobEvent[]`:** event có ID lớn hơn `after_event_id`, sort ASC.
+Trả array rỗng khi chưa có event mới.
+
+**Lỗi chính:** `404 JOB_NOT_FOUND`, `422 INVALID_EVENT_CURSOR`.
+
+### 9.5 GET `/jobs/{job_id}/events/stream`
+
+**Mục đích:** real-time progress bằng Server-Sent Events.
+
+**Input:** query `after_event_id` hoặc header `Last-Event-ID`. Nếu cả hai có,
+query được ưu tiên.
+
+**Output — `200 text/event-stream`:**
+
+```text
+id: 17
+event: progress
+data: {"event_id":17,"job_id":"job_01J5...","stage":"PARSING","message":"Parsed 3 of 10 documents","completed_items":3,"total_items":10,"warning":false,"occurred_at":"2026-08-21T09:01:00Z"}
+
+event: end
+data: {}
+```
+
+Server gửi heartbeat comment định kỳ. `end` chỉ được gửi khi job terminal và
+đã flush toàn bộ durable events.
+
+**Lỗi trước khi mở stream:** `404 JOB_NOT_FOUND`.
+
+### 9.6 POST `/jobs/{job_id}/retry`
+
+**Mục đích:** retry job `FAILED` hoặc `INCOMPLETE` mà không tạo duplicate
+output/version.
+
+**Headers:** `Idempotency-Key` required.
+
+**Input:**
 
 ```json
 {
-  "job_id": "job-id",
+  "reason": "Retried after parser dependency recovered"
+}
+```
+
+`reason` optional, tối đa 500 chars.
+
+**Output — `202 Job`:** cùng logical job hoặc job kế nhiệm theo persistence
+design, `attempt_count` tăng và state `QUEUED`.
+
+**Lỗi chính:** `404 JOB_NOT_FOUND`, `409 JOB_NOT_RETRYABLE`,
+`409 ACTIVE_JOB_CONFLICT`.
+
+## 10. Output APIs
+
+### 10.1 GET `/projects/{project_id}/versions/{version_id}/outputs`
+
+**Mục đích:** list toàn bộ immutable output revisions của version.
+
+**Input:** path `project_id`, `version_id`.
+
+**Output — `200 OutputRevision[]`:** sort `ordinal DESC`; tối đa một revision
+có status `CURRENT`.
+
+**Lỗi chính:** `404 PROJECT_NOT_FOUND`, `404 VERSION_NOT_FOUND`.
+
+### 10.2 GET `/projects/{project_id}/versions/{version_id}/outputs/{output_id}/download`
+
+**Mục đích:** download đúng DOCX thuộc project/version trong URL. Nested path
+giúp authorization và audit log không dựa chỉ vào global `output_id`.
+
+**Input:** path IDs; không có body.
+
+**Output:**
+
+- `200` stream DOCX với
+  `Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+  và `Content-Disposition: attachment`; hoặc
+- `302` tới short-lived signed URL của private object storage.
+
+**Lỗi chính:** `404 PROJECT_NOT_FOUND`, `404 VERSION_NOT_FOUND`,
+`404 OUTPUT_NOT_FOUND`, `410 OUTPUT_EXPIRED`,
+`501 S3_STORAGE_NOT_CONFIGURED` trong runtime hiện tại.
+
+## 11. API bridge hiện tại và kế hoạch migration
+
+Frontend UAT hiện tại vẫn phụ thuộc nhóm route dưới đây. Không xoá chúng trong
+thay đổi này vì sẽ làm hỏng browser flow đang chạy.
+
+| Status | Method | Path | Input | Output hiện tại | Thay thế bởi |
+|---|---|---|---|---|---|
+| BRIDGE | `POST` | `/projects/upload` | `multipart/form-data`: `files[]`, `relative_paths[]`, optional `name` | `202 ProjectBridge`; tự chạy pipeline cũ | upload session + validate + promote + explicit jobs |
+| BRIDGE | `GET` | `/projects` | none | `200 ProjectBridge[]` | target ProjectPage |
+| BRIDGE | `GET` | `/projects/{project_id}` | path ID | `200 ProjectBridge` | target ProjectDetail |
+| BRIDGE | `GET` | `/projects/{project_id}/events` | `after_event_id` | `200 ProjectEventBridge[]` | `/jobs/{job_id}/events` |
+| BRIDGE | `GET` | `/projects/{project_id}/events/stream` | `after_event_id` | SSE progress | `/jobs/{job_id}/events/stream` |
+| BRIDGE | `GET` | `/projects/{project_id}/output` | path ID | DOCX hoặc `409/410` | nested version output download |
+
+Current `ProjectBridge` response:
+
+```json
+{
   "project_id": "project-id",
-  "project_version_id": "version-id",
-  "job_type": "DISCOVERY",
-  "state": "RUNNING",
-  "stage": "PARSING",
-  "completed_items": 3,
-  "total_items": 10,
-  "current_message": "Parsing source documents",
-  "attempt_count": 1,
-  "correlation_id": "correlation-id",
-  "created_at": "2026-08-13T04:00:00Z",
-  "updated_at": "2026-08-13T04:01:00Z",
-  "heartbeat_at": "2026-08-13T04:01:00Z",
-  "error": null
+  "name": "Lumina Grand",
+  "source_type": "LOCAL_FOLDER",
+  "status": "PROCESSING",
+  "current_activity": "Drafting issues",
+  "allowed_actions": ["VIEW_STATUS", "VIEW_PROGRESS"],
+  "created_at": "2026-08-21T08:00:00Z",
+  "updated_at": "2026-08-21T08:01:00Z",
+  "started_at": "2026-08-21T08:00:10Z",
+  "completed_at": null,
+  "output_available": false,
+  "output_download_url": null,
+  "version": null,
+  "issue_count": null,
+  "error": null,
+  "raw_expires_at": "2026-08-28T08:00:00Z",
+  "raw_deleted_at": null
 }
 ```
 
-### Output revisions
+Bridge retirement conditions:
 
-| Trạng thái | Method | Path | Mục đích |
-|---|---|---|---|
-| ✅ | `GET` | `/projects/{project_id}/versions/{version_id}/outputs` | Danh sách DOCX revisions của version |
-| 🟡 | `GET` | `/outputs/{output_id}/download` | Download/presigned URL cho DOCX |
+1. upload-session storage và validation chạy end-to-end;
+2. promote tạo project + `v0.1`;
+3. frontend chuyển sang explicit discovery/Audit jobs;
+4. frontend tải output theo project/version/output ID;
+5. UAT regression cho upload → review → Audit → download pass.
 
-Output metadata đã lưu theo revision. Download mới trả `501 S3_STORAGE_NOT_CONFIGURED` vì object chưa thể đặt trên private S3.
+### 11.1 Runtime-only endpoints đang chờ migration
 
-## 4. API POC đang giữ để tương thích
+Hai path dưới đây vẫn xuất hiện trong OpenAPI runtime nhưng không thuộc
+contract đích:
 
-| Trạng thái | Method | Path | Ghi chú |
-|---|---|---|---|
-| ⏳ | `POST` | `/projects/upload` | Upload local và tự chạy pipeline cũ; không phải flow v2 |
-| ⏳ | `GET` | `/projects` | Danh sách project theo model POC |
-| ⏳ | `GET` | `/projects/{project_id}` | Chi tiết project theo model POC |
-| ⏳ | `GET` | `/projects/{project_id}/events` | Progress POC |
-| ⏳ | `GET` | `/projects/{project_id}/events/stream` | SSE progress POC |
-| ⏳ | `GET` | `/projects/{project_id}/output` | Download output local của POC |
-| ⏳ | `POST` | `/runs` | Chạy pipeline theo local paths |
-| ⏳ | `GET` | `/runs`, `/runs/{run_id}` | Theo dõi run cũ |
-| ⏳ | `GET` | `/runs/{run_id}/events` | Poll event run cũ |
-| ⏳ | `GET` | `/runs/{run_id}/events/stream` | SSE run cũ |
-| ⏳ | `GET` | `/runs/{run_id}/output` | Download output run cũ |
+| Method | Path | Input hiện tại | Output hiện tại | Migration |
+|---|---|---|---|---|
+| `PUT` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}` | Full payload gồm `row_version`, `observed_gap`, `title_hint`, `evidence_summary`, `risk_category`, `status`, `confidence`, `validation_flags`, `source_refs` | `200 Issue` | Thay bằng partial `PATCH`; system-owned fields không cho client ghi |
+| `GET` | `/outputs/{output_id}/download` | Path `output_id` | Hiện trả `501 S3_STORAGE_NOT_CONFIGURED` | Thay bằng nested project/version/output path |
 
-Không nên build frontend v2 mới dựa trên nhóm POC này. Chúng được giữ tạm thời để tránh làm hỏng demo hiện có và sẽ được retire sau khi upload session + S3 + worker v2 chạy end-to-end.
+Payload đầy đủ của `PUT issue` hiện tại:
 
-## 5. Mã lỗi chính
+```json
+{
+  "row_version": 3,
+  "observed_gap": "Quarterly access review evidence was incomplete.",
+  "title_hint": "Access review evidence retention",
+  "evidence_summary": "One of four quarterly reviews was unavailable.",
+  "risk_category": "Access Management",
+  "status": "READY_FOR_REVIEW",
+  "confidence": 0.86,
+  "validation_flags": [],
+  "source_refs": []
+}
+```
 
-| HTTP | Code | Khi nào xảy ra |
+Không build client mới dựa trên hai endpoint này. Chỉ remove sau khi frontend
+đã chuyển sang `PATCH` và nested output download.
+
+### 11.2 API POC đã xoá
+
+Nhóm `/api/v1/runs*` nhận local server paths, không được frontend UAT gọi và
+đã được gỡ khỏi router/OpenAPI:
+
+- `POST /runs`;
+- `GET /runs`;
+- `GET /runs/{run_id}`;
+- `GET /runs/{run_id}/events`;
+- `GET /runs/{run_id}/events/stream`;
+- `GET /runs/{run_id}/output`.
+
+CLI `python backend/main.py --project ... --issues ...` là tool nội bộ riêng,
+không phải public HTTP contract và vẫn được giữ.
+
+## 12. Runtime gaps cần đóng trước UAT sign-off
+
+| Gap | Runtime hiện tại | Contract đích |
+|---|---|---|
+| Upload session | Route trả `501 S3_STORAGE_NOT_CONFIGURED` | Full UploadSession + validation |
+| Project list/detail | Trả `ProjectBridge` | ProjectPage/ProjectDetail |
+| Issue list | Trả array | IssuePage có cursor |
+| Issue update | `PUT`, full editable payload | `PATCH`, partial business fields |
+| Disposition comment | Chưa có | Optional `comment` và audit trail |
+| Discovery/Audit | Route trả `501 AI_PIPELINE_NOT_IMPLEMENTED` | Durable `202 Job` |
+| Retry | Backend method hiện trả job trực tiếp | `202`, idempotency và retry reason |
+| Output download | Global `/outputs/{output_id}/download`, trả `501` | Nested project/version path |
+| Idempotency | Chưa enforce đồng đều | Required cho command endpoint |
+| UAT limits | Runtime settings cũ có thể lớn hơn | 20 files, 100,000,000 bytes |
+
+Không coi route `501` là feature đã hoàn thành. Swagger chỉ chứng minh contract
+đã publish, không chứng minh luồng UAT end-to-end đã sẵn sàng.
+
+## 13. Mã lỗi nghiệp vụ
+
+| HTTP | Code | Khi nào |
 |---:|---|---|
-| `404` | `PROJECT_NOT_FOUND` | Không tìm thấy project |
-| `404` | `VERSION_NOT_FOUND` | Không tìm thấy version hoặc version không thuộc project |
-| `404` | `ISSUE_NOT_FOUND` | Không tìm thấy issue trong version |
-| `404` | `JOB_NOT_FOUND` | Không tìm thấy job |
-| `409` | `ROW_VERSION_CONFLICT` | Update bằng `row_version` cũ |
-| `409` | `ACTIVE_JOB_CONFLICT` | Job tương đương đang queued/running |
-| `409` | `INVALID_STATE` | Workflow transition không hợp lệ |
-| `422` | `INVALID_REQUEST` | Domain validation thất bại |
-| `501` | `S3_STORAGE_NOT_CONFIGURED` | Endpoint cần S3 nhưng bucket chưa sẵn sàng |
-| `501` | `AI_PIPELINE_NOT_IMPLEMENTED` | Endpoint cần AI pipeline/worker chưa implement |
-
-## 6. Phần cần thảo luận tiếp
-
-- JSON schema versioned cho `scope_map`, evidence facts, AI candidates, coverage matrix, validation report và run manifest.
-- Quy tắc preflight chính xác trước khi Audit, nhất là issue nào được đưa vào DOCX.
-- Central Guideline/template metadata và cách chọn version.
-- Response chính thức của upload session gồm multipart hay một presigned URL cho mỗi file.
-
-Các phần trên chưa chặn việc frontend tích hợp version/issue register và job progress contract hiện tại.
+| 404 | `UPLOAD_SESSION_NOT_FOUND` | Không tìm thấy upload session |
+| 404 | `PROJECT_NOT_FOUND` | Không tìm thấy project |
+| 404 | `VERSION_NOT_FOUND` | Không tìm thấy version trong project |
+| 404 | `ISSUE_NOT_FOUND` | Không tìm thấy issue trong version |
+| 404 | `JOB_NOT_FOUND` | Không tìm thấy job |
+| 404 | `OUTPUT_NOT_FOUND` | Không tìm thấy output trong version |
+| 409 | `DUPLICATE_PROJECT_NAME` | Tên project đã tồn tại |
+| 409 | `ROW_VERSION_CONFLICT` | Issue update dùng row version cũ |
+| 409 | `ACTIVE_JOB_CONFLICT` | Job tương đương đang queued/running |
+| 409 | `INVALID_STATE` | Workflow transition không hợp lệ |
+| 409 | `JOB_NOT_RETRYABLE` | Retry job chưa terminal hoặc đã succeeded |
+| 409 | `SESSION_ALREADY_PROMOTED` | Upload session đã tạo project |
+| 410 | `UPLOAD_SESSION_EXPIRED` | Staging hết retention |
+| 410 | `OUTPUT_EXPIRED` | Output không còn trong retention |
+| 413 | `FOLDER_TOO_LARGE` | Tổng content length vượt 100 MB |
+| 415 | `UNSUPPORTED_FILE_TYPE` | Không phải DOCX/PDF/XLSX |
+| 422 | `INVALID_UPLOAD_MANIFEST` | Path/metadata/file count không hợp lệ |
+| 422 | `SESSION_NOT_READY` | Promote trước khi validation pass |
+| 422 | `INVALID_ISSUE` | Issue business fields không hợp lệ |
+| 422 | `INVALID_DISPOSITION` | Review status/transition không hợp lệ |
+| 422 | `ISSUE_REVISION_STALE` | Audit submit bằng revision cũ |
+| 422 | `AUDIT_PREFLIGHT_FAILED` | Issue/source/asset chưa đủ để Audit |
+| 501 | `S3_STORAGE_NOT_CONFIGURED` | Capability cần object storage chưa sẵn sàng |
+| 501 | `AI_PIPELINE_NOT_IMPLEMENTED` | Discovery/Audit worker chưa implement |

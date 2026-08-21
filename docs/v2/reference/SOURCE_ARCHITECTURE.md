@@ -91,7 +91,7 @@ Các module hiện có:
 | `backend/app/application/project_manager.py` | Folder upload, background execution, progress và retention | POC dùng local thread; production đổi queue adapter |
 | `backend/app/infrastructure/project_repository.py` | Project/status/event persistence | SQLAlchemy; hỗ trợ PostgreSQL và SQLite local |
 | `backend/app/infrastructure/project_storage.py` | Raw input/output local storage | Production đổi sang encrypted S3/object storage |
-| `backend/app/application/run_manager.py` | Compatibility run execution | Legacy `/runs` vẫn in-memory |
+| `backend/app/application/run_manager.py` | Internal compatibility run execution | Không còn được expose qua HTTP; state vẫn in-memory |
 | `backend/app/documents/parsers.py` | Parse DOCX/PDF/XLSX | Gắn trực tiếp với `Path`, output chưa có provenance đủ chi tiết |
 | `backend/app/ai/client.py` | Anthropic client, retry, JSON parsing | Chưa có provider port/Bedrock adapter |
 | `backend/app/ai/prompts/*` | Prompt use cases | Prompt/schema/version chưa được quản lý như artefact |

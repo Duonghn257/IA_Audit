@@ -27,6 +27,7 @@ def test_openapi_publishes_v2_workspace_contract(tmp_path: Path) -> None:
     assert "get" in paths["/api/v1/jobs/{job_id}/events/stream"]
     assert "post" in paths["/api/v1/upload-sessions"]
     assert "get" in paths["/api/v1/outputs/{output_id}/download"]
+    assert not any(path.startswith("/api/v1/runs") for path in paths)
 
     app.state.run_manager.shutdown()
     app.state.project_manager.shutdown()

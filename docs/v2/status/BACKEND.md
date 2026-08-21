@@ -72,8 +72,8 @@ suy luận điều kiện export.
 `relative_paths` có cùng độ dài, normalize relative path và từ chối unsafe
 upload. Pipeline hiện tại còn yêu cầu `sample_issues.json` ở root folder.
 
-Legacy `/api/v1/runs/*` vẫn được giữ để compatibility nhưng state còn nằm trong
-memory; đây không phải flow POC chính.
+Legacy `/api/v1/runs/*` đã được gỡ khỏi router/OpenAPI vì frontend UAT không
+sử dụng. CLI nội bộ vẫn được giữ cho smoke test và vận hành cục bộ.
 
 ## Pipeline tám bước
 
