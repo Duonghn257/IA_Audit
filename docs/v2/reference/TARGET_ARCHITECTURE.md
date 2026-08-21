@@ -1,21 +1,22 @@
-# Operation Report Jedi — UAT Target Architecture
+# Operation Report Jedi — Target Architecture
 
-> **Cập nhật:** 10/08/2026
-> **Trạng thái:** Tài liệu tham khảo cho target architecture UAT; không dùng để báo cáo tiến độ
+> **Cập nhật:** 21/08/2026
+> **Trạng thái:** Baseline kiến trúc đích đã chốt cho UAT
 > **Mục tiêu:** Nhận local audit folder bất biến, phát hiện candidate issues có bằng chứng, hỗ trợ auditor duyệt và tạo versioned Draft Issue Log DOCX.
-> **Vai trò:** Tài liệu reference cho kiến trúc product v2; điểm bắt đầu của project là [Delivery Hub](../README.md).
-> **Source code architecture:** Xem [Backend, frontend và integration patterns](SOURCE_ARCHITECTURE.md).
-> **Yêu cầu phần mềm:** Xem [Software Requirements Specification](../SOFTWARE_REQUIREMENTS_SPECIFICATION.md).
+> **Source code architecture:** [Backend, frontend và integration patterns](SOURCE_ARCHITECTURE.md).
+> **Yêu cầu phần mềm chi tiết:** [Software Requirements Specification](../SOFTWARE_REQUIREMENTS_SPECIFICATION.md).
+> **Kế hoạch delivery:** [Phân công FE, BE và AI](../UAT_FE_BE_AI_DELIVERY_PLAN.md).
 
-## Cách sử dụng tài liệu này
+## Phạm vi tài liệu
 
-Đây là thiết kế target cho UAT evidence-driven discovery, auditor review,
-versioned audit và local download. Nó không phản ánh toàn bộ chức năng đã triển khai.
+Tài liệu này mô tả trạng thái đích của sản phẩm, ranh giới kiến trúc, luồng xử
+lý, data contracts và tiêu chí hoàn thành. Tài liệu có thể được đọc độc lập;
+người đọc không cần biết kiến trúc hoặc cách vận hành của bất kỳ phiên bản nào
+trước đó.
 
-Để xem trạng thái thực tế, bắt đầu tại [Delivery Hub](../README.md), sau đó đọc
-[Frontend Status](../status/FRONTEND.md), [Backend Status](../status/BACKEND.md)
-và [Infrastructure Status](../status/INFRASTRUCTURE.md). Công việc sắp làm nằm
-tại [Delivery Roadmap](../roadmap/README.md).
+Các tài liệu được liên kết bổ sung chi tiết ở mức source code, requirement và
+kế hoạch delivery; mọi quyết định kiến trúc cần thiết được trình bày đầy đủ tại
+đây.
 
 ## 1. Kết luận ngắn
 
@@ -28,26 +29,34 @@ Việc soạn toàn bộ issues từ một bộ tài liệu là **khả thi ở 
 
 Hệ thống không nên cam kết “tự tìm đúng 100% mọi issue”. Một số issue phụ thuộc vào phỏng vấn, quan sát thực tế, professional judgement hoặc evidence chưa nằm trong tài liệu.
 
-Kiến trúc v2 vì vậy tạo ra:
+Kiến trúc mục tiêu tạo ra ba kết quả chính:
 
 1. **Candidate Issue Register**: danh sách issue do AI đề xuất, có evidence và confidence.
 2. **Coverage Matrix**: scope/control nào đã được xem xét, chưa có evidence hoặc chưa thể kết luận.
 3. **Draft Issue Log**: chỉ được tạo từ candidate đã được auditor chấp thuận.
 
-## 2. Thay đổi quan trọng so với v1
+## 2. Phạm vi sản phẩm và ranh giới UAT
 
-| V1 hiện tại | V2 đề xuất |
-|---|---|
-| Cần auditor nhập `sample_issues.json` trước | Có thể tự phát hiện candidate issues từ artefacts |
-| Artefacts chủ yếu làm context để viết | Artefacts được phân tích có hệ thống để tìm evidence và gaps |
-| LLM có thể tự thêm hoặc bỏ issue mà không có mapping | Mỗi evidence fact và candidate đều có ID, nguồn và trạng thái |
-| Validation chỉ kiểm tra draft đã sinh | Validation kiểm tra parsing, coverage, evidence, scope và draft |
-| Số issue phụ thuộc seed và hành vi LLM | Số candidate xuất phát từ evidence; số issue cuối do auditor duyệt |
-| Cảnh báo không chặn output | Lỗi nghiêm trọng chặn bước phát hành draft |
-| Load nhiều tài liệu vào một prompt lớn | Parse một lần, chia theo cấu trúc, tìm context theo từng scope/control |
+Sản phẩm phải cung cấp một workflow liền mạch:
 
-V2 cho phép auditor bổ sung manual issue vào Candidate Issue Register sau khi
-discovery hoàn tất; manual issue dùng cùng validation và Audit gate.
+1. Auditor chọn local folder, xem folder tree và kết quả validation.
+2. Hệ thống tạo project với source snapshot bất biến và audit version `v0.1`.
+3. Auditor chủ động chạy discovery để hệ thống phân tích artefacts, lập
+   Coverage Matrix và đề xuất candidate issues có evidence.
+4. Auditor review, chỉnh sửa, loại bỏ candidate hoặc bổ sung manual issue.
+5. Auditor chạy Audit trên version đang chọn để tạo và tải Draft Issue Log DOCX.
+6. Auditor có thể tạo audit version tiếp theo từ một version đã chọn mà không
+   làm thay đổi source snapshot hoặc output history.
+
+Mỗi evidence fact và candidate có ID, source reference và trạng thái. Validation
+bao phủ parsing, coverage, evidence, scope và draft; lỗi nghiêm trọng về source,
+evidence hoặc scope phải chặn candidate khỏi Issue Log. Tài liệu được parse một
+lần, chia theo cấu trúc và truy xuất theo từng scope/control thay vì đưa toàn bộ
+nội dung vào một prompt lớn.
+
+Auditor có thể bổ sung manual issue vào Candidate Issue Register sau discovery.
+Manual issue dùng cùng Audit gate nhưng có chính sách evidence riêng được mô tả
+tại Bước 8.
 
 ### Quyết định nguồn dữ liệu cho UAT
 
@@ -62,8 +71,8 @@ sửa, xóa hoặc thay thế source file trong project.
 
 Provenance dùng `document_id`, relative path, content hash, size, MIME, modified
 time nếu có và parser version. Absolute path trên máy auditor không được gửi
-hoặc lưu. SharePoint chỉ có thể được xem xét ở phase sau bằng một adapter khác;
-nó không thuộc UAT architecture hoặc acceptance criteria hiện tại.
+hoặc lưu. SharePoint, Microsoft Graph và publish output về hệ thống bên ngoài
+không thuộc phạm vi UAT.
 
 ## 3. Nguyên tắc thiết kế
 
@@ -381,7 +390,7 @@ flowchart LR
 | Object Storage | Source snapshots, parsed cache, JSON artefacts, DOCX và reports |
 | CloudWatch | Latency, errors, token usage, coverage và validation metrics |
 
-Không cần agent framework cho MVP v2. “Harvester”, “Sorter” và “Reviewer” nên là các module có contract rõ ràng trong workflow, không phải autonomous agents.
+Bản UAT không cần agent framework. “Harvester”, “Sorter” và “Reviewer” là các module có contract rõ ràng trong workflow, không phải autonomous agents.
 
 ## 7. Hai chế độ sử dụng
 
@@ -398,8 +407,6 @@ Artefacts
   → Draft Issue Log
 ```
 
-Đây là mode mới của v2.
-
 ### Mode B — Manual Issue Augmentation
 
 Dùng khi auditor đã biết issue và chỉ cần trợ lý soạn:
@@ -411,11 +418,10 @@ Auditor Observations
   → Draft Issue Log
 ```
 
-Mode này thay thế cách dùng `sample_issues.json` hiện tại. Auditor có thể thêm
-manual issue vào current audit version sau khi discovery hoàn tất. Hệ thống tìm
-supporting evidence và criteria trong source snapshot, nhưng manual issue không
-bắt buộc có hai ref này để Audit. Nó vẫn phải qua review/final validation và
-giữ `origin = MANUAL`.
+Auditor có thể thêm manual issue vào current audit version sau khi discovery
+hoàn tất. Hệ thống tìm supporting evidence và criteria trong source snapshot,
+nhưng manual issue không bắt buộc có hai ref này để Audit. Nó vẫn phải qua
+review/final validation và giữ `origin = MANUAL`.
 
 ## 8. Data contracts chính
 
@@ -569,33 +575,29 @@ polling là fallback). Frontend hiển thị stage hiện tại, activity log g�
 elapsed time và heartbeat; nếu không thể tính đáng tin cậy thì dùng progress bar
 indeterminate thay vì phần trăm giả.
 
-## 14. Delivery roadmap
-
-Trạng thái và thứ tự triển khai không được duy trì trong tài liệu reference này.
-Xem [Delivery Roadmap](../roadmap/README.md) để biết work item, priority,
-dependency và acceptance criteria hiện tại.
-
-## 15. Decision status và dependencies
+## 14. Quyết định kiến trúc và dependencies vận hành
 
 Đã chốt:
 
 1. Guidelines và Samples/template do app quản lý tập trung, có version.
 2. AI candidate bắt buộc có cả evidence và criteria; manual issue không bắt buộc.
 3. `risk_category` optional; AI suggest và auditor có thể đổi hoặc để trống.
-4. Merge/Split UI deferred; UAT dùng create/edit/reject.
-5. Retry sau failure bắt buộc; user-triggered Cancel deferred.
+4. UAT hỗ trợ create/edit/reject; Merge/Split UI không thuộc phạm vi.
+5. Retry sau failure là bắt buộc; UAT không có user-triggered Cancel.
 6. Chỉ hỗ trợ `.docx`, `.pdf`, `.xlsx`; một folder tối đa 20 files và 100 MB.
 7. AI suggestions do auditor review thủ công; chưa có quantitative pass/fail threshold.
 8. Internal UAT không có app login/RBAC; access được giới hạn ở corporate VPN/approved IP range.
 
-Còn phụ thuộc:
+Các dependency vận hành phải được xác nhận trước UAT:
 
 1. Corporate VPN/approved IP range và internal UAT HTTPS endpoint.
-2. Retention của staging/source/output.
+2. Retention của staging, source, derived artefacts và output.
+3. Central Guidelines, DOCX template và golden UAT dataset đã được phê duyệt.
+4. UAT credentials, Anthropic quota và người chịu trách nhiệm xử lý incident.
 
-## 16. Definition of Done cho v2
+## 15. Definition of Done
 
-UAT workflow chỉ được coi là hoàn tất khi:
+Workflow chỉ được coi là hoàn tất khi:
 
 - Server validation đã xác nhận artefact profile và manifest ghi nhận trạng thái của tất cả file.
 - Local source snapshot đã được đóng băng; không có file mutation capability sau Create project.
@@ -614,4 +616,6 @@ UAT workflow chỉ được coi là hoàn tất khi:
 - Mỗi output-ready version có đúng một DOCX tải được; app không chỉnh sửa output content.
 - Run manifest chứa đầy đủ model/prompt/parser/schema version và hashes để truy vết.
 
-Kiến trúc này biến project từ một **seed-driven drafting POC** thành một **evidence-driven issue discovery and drafting assistant**, trong khi vẫn giữ auditor judgement và accountability.
+Operation Report Jedi là một **evidence-driven issue discovery and drafting
+assistant**. Auditor giữ quyền quyết định cuối cùng và chịu trách nhiệm đối với
+judgement, risk classification và nội dung được phát hành.
