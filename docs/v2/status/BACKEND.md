@@ -1,6 +1,6 @@
 # Trạng thái Backend
 
-> Xác minh gần nhất: 03/08/2026
+> Xác minh gần nhất: 12/08/2026
 > Trạng thái bàn giao: POC đã triển khai
 > Source of truth: `backend/app/`
 
@@ -20,6 +20,10 @@ FastAPI route
 
 API và compatibility CLI cùng dùng `AuditPipeline`; FastAPI không gọi CLI
 entrypoint.
+
+Ngày 12/08, các helper của pipeline đã được tách theo responsibility mà không
+đổi API behavior: AI client/prompt/validation nằm trong `app/ai`, parsing và
+DOCX trong `app/documents`, còn context/retrieval boundary trong `app/rag`.
 
 ## Checklist chức năng
 
@@ -95,7 +99,9 @@ roadmap item.
 | Application orchestration | `backend/app/application/` |
 | Project domain model | `backend/app/domain/projects.py` |
 | SQLAlchemy persistence | `backend/app/infrastructure/` |
-| Parsing/LLM/validation/rendering | `backend/app/pipeline/` |
+| Anthropic client, prompts và AI validation | `backend/app/ai/` |
+| Parsing, template inspection và DOCX rendering | `backend/app/documents/` |
+| RAG/context assembly | `backend/app/rag/` |
 | Migrations | `backend/alembic/` |
 | Tests | `backend/tests/` |
 
@@ -104,7 +110,7 @@ roadmap item.
 | Kiểm tra | Kết quả |
 |---|---|
 | Backend automated tests | 14 passed |
-| Warning | 1 Starlette TestClient/httpx deprecation warning |
+| Import/compile check | Pass |
 | Live Lumina Grand CLI pipeline | Hoàn thành 8/8 stages |
 | Generated DOCX | Hợp lệ và mở được |
 | API container health | Healthy |

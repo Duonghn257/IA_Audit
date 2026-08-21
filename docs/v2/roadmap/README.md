@@ -1,6 +1,6 @@
 # Delivery Roadmap
 
-> Review gần nhất: 03/08/2026
+> Review gần nhất: 10/08/2026
 > Nguyên tắc: Chốt POC trước; stabilization, production và product v2 làm sau
 
 Đây là nơi duy nhất ghi planned work. Các trang `status/` mô tả những gì đang
@@ -91,6 +91,23 @@ Acceptance criteria:
 Một stabilization item chỉ hoàn thành khi implementation, automated tests và
 status page liên quan được cập nhật cùng nhau.
 
+## Planned — UAT product releases
+
+Requirement IDs, chi tiết acceptance criteria và project version semantics nằm
+tại [Software Requirements Specification](../SOFTWARE_REQUIREMENTS_SPECIFICATION.md).
+Effort, staffing và milestone dates tới 15/09/2026 nằm tại
+[UAT Release Estimation Plan](../UAT_ESTIMATION_PLAN.md).
+
+| ID | Work item | Trạng thái | Dependency |
+|---|---|---|---|
+| UAT-R1 | Local folder staging/validation (DOCX/PDF/XLSX, max 20 files/100 MB), central Guidelines/template, immutable source, Create project + `v0.1` | `PLANNED` | POC baseline ổn định |
+| UAT-R2 | Background candidate discovery, Candidate Issue Register, manual issues và versioned issue workspace | `PLANNED` | UAT-R1 |
+| UAT-R3 | **+ New audit** versioning, background Audit, frozen input, DOCX revisions/current version và version history | `PLANNED` | UAT-R2 |
+| UAT-R4 | Internal-access hardening, retry/recovery, retention, automated E2E và manual AI suggestion review record | `PLANNED` | UAT-R3 + corporate VPN/IP allowlist |
+
+Release number `UAT-RN` là version giao phần mềm. Nó không phải project content
+version `v0.N` được tạo bởi discovery/Audit.
+
 ## Planned — production foundation
 
 | ID | Work item | Trạng thái |
@@ -108,21 +125,20 @@ Các items này cần architecture và security decisions trước khi implement
 [Target Architecture](../reference/TARGET_ARCHITECTURE.md) và
 [Source Architecture](../reference/SOURCE_ARCHITECTURE.md).
 
-## Deferred — product v2
+## Deferred — post-UAT enhancements
 
-Các chức năng dưới đây có giá trị nhưng không được chặn POC hiện tại:
+Các chức năng dưới đây có giá trị nhưng không thuộc UAT baseline hiện tại:
 
-- Evidence-driven candidate issue discovery.
-- Coverage Matrix và incomplete-evidence handling.
-- Observation Inbox.
-- Draft Issue Review.
-- Auditor approve/edit/merge/split/reject actions.
-- Approval gates trước DOCX rendering.
-- Output history và SharePoint publishing.
+- SharePoint picker/sync/output publishing.
+- In-app DOCX editing.
+- Real-time collaborative issue editing.
+- Automated report submission/finalisation.
+- Advanced merge/split UI nếu create/edit/reject đủ cho UAT.
+- User-triggered Cancel cho discovery/Audit jobs.
 - Bedrock provider adapter.
 
-Chỉ chuyển item ra khỏi `DEFERRED` sau khi thống nhất product flow, data
-contract, security boundary và acceptance criteria.
+Chỉ chuyển item ra khỏi `DEFERRED` sau khi có requirement, security boundary và
+acceptance criteria riêng.
 
 ## Quy tắc cập nhật
 

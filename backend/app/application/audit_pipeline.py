@@ -7,18 +7,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, TextIO
 
+from app.ai.client import make_client
+from app.ai.prompts.constraints import extract_constraints
+from app.ai.prompts.critique import critique_draft
+from app.ai.prompts.drafting import draft_issues
+from app.ai.prompts.styling import normalise_style_spec, produce_style_spec
+from app.ai.validation import build_validation
+from app.application.pipeline_versioning import next_version
 from app.core.config import load_config
-from app.pipeline.context import HELD_OUT_FILENAMES, build_context
-from app.pipeline.llm import make_client
-from app.pipeline.parsers import parse_folder, persist_parsed
-from app.pipeline.prompts.constraints import extract_constraints
-from app.pipeline.prompts.critique import critique_draft
-from app.pipeline.prompts.drafting import draft_issues
-from app.pipeline.prompts.styling import normalise_style_spec, produce_style_spec
-from app.pipeline.render import render
-from app.pipeline.template_inspector import inspect_templates
-from app.pipeline.validate import build_validation
-from app.pipeline.versioning import next_version
+from app.documents.parsers import parse_folder, persist_parsed
+from app.documents.render import render
+from app.documents.template_inspector import inspect_templates
+from app.rag.context import HELD_OUT_FILENAMES, build_context
 
 TOTAL_STEPS = 8
 

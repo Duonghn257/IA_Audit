@@ -8,6 +8,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.settings import load_api_settings
 from app.infrastructure.database import Base
+from app.infrastructure import audit_models  # noqa: F401
 from app.infrastructure import project_repository  # noqa: F401
 
 config = context.config

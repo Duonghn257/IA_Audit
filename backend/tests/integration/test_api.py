@@ -34,11 +34,15 @@ class FakeRunManager:
         return None
 
 
-def _settings(repository_root: Path) -> ApiSettings:
+def _settings(
+    repository_root: Path,
+    *,
+    data_root: Path | None = None,
+) -> ApiSettings:
     return ApiSettings(
         repository_root=repository_root,
         backend_root=repository_root / "backend",
-        data_root=repository_root / "data",
+        data_root=data_root or repository_root / "data",
         cors_origins=("http://localhost:5173",),
         run_workers=1,
     )
@@ -59,10 +63,14 @@ def test_health_endpoint() -> None:
     assert response.headers["X-Correlation-ID"]
 
 
-def test_create_and_get_run() -> None:
-    repository_root = Path(__file__).resolve().parents[3]
+def test_create_and_get_run(tmp_path: Path) -> None:
+    data_root = tmp_path / "data"
+    project_path = data_root / "project"
+    project_path.mkdir(parents=True)
+    issues_path = tmp_path / "issues.json"
+    issues_path.write_text("[]", encoding="utf-8")
     app = create_app(
-        settings=_settings(repository_root),
+        settings=_settings(tmp_path, data_root=data_root),
         run_manager=FakeRunManager(),
     )
 
@@ -70,8 +78,8 @@ def test_create_and_get_run() -> None:
         created = client.post(
             "/api/v1/runs",
             json={
-                "project_path": "data/lumina_grand",
-                "issues_path": "backend/sample_issues.json",
+                "project_path": str(project_path),
+                "issues_path": str(issues_path),
             },
         )
         fetched = client.get(
@@ -116,4 +124,3 @@ def test_unknown_run_uses_stable_error_contract() -> None:
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "RUN_NOT_FOUND"
-

@@ -12,12 +12,14 @@ backend/
 ├── main.py                        # Compatibility CLI adapter
 ├── app/
 │   ├── api/                       # HTTP routes, schemas, errors, middleware
-│   ├── application/               # Pipeline, project/run managers, ports
+│   ├── ai/                        # Anthropic client, prompts, AI validation
+│   ├── application/               # Workflow orchestration, managers, ports
 │   ├── bootstrap/                 # FastAPI composition root
 │   ├── core/                      # LLM/API settings
+│   ├── documents/                 # Parsers, template inspection, DOCX rendering
 │   ├── domain/                    # Project/run states and events
 │   ├── infrastructure/            # SQL repository, storage, run store
-│   └── pipeline/                  # Existing parsers, prompts and DOCX renderer
+│   └── rag/                       # Retrieval and context assembly boundary
 ├── tests/
 │   ├── unit/
 │   ├── integration/
@@ -33,11 +35,15 @@ Dependency direction:
 ```text
 API / CLI → Application → Domain
                      ↘ Infrastructure adapters
-Application pipeline → Existing pipeline components
+Application workflow → AI + RAG + Documents
 ```
 
 `main.py`, the legacy run API and project upload workflow call the same
 `AuditPipeline`; orchestration is not duplicated in HTTP routes.
+
+The AI and RAG code lives inside `backend/app` and shares the backend domain,
+repository and schema boundaries. It is not a separate service or repository.
+Future API and worker processes may use the same package and container image.
 
 ## POC workflow
 

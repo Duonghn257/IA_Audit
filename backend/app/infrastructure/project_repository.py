@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import select
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 from sqlalchemy.orm import sessionmaker
@@ -24,6 +24,9 @@ def _utcnow() -> datetime:
 
 class ProjectModel(Base):
     __tablename__ = "projects"
+    __table_args__ = (
+        Index("uq_projects_name", "name", unique=True),
+    )
 
     project_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     name: Mapped[str] = mapped_column(String(255))

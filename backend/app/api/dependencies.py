@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from fastapi import Request
 
+from app.application.audit_workspace_service import AuditWorkspaceService
 from app.application.path_resolver import LocalPathResolver
 from app.application.project_manager import ProjectManager
 from app.application.run_manager import RunManager
@@ -18,3 +19,7 @@ def get_path_resolver(request: Request) -> LocalPathResolver:
 
 def get_project_manager(request: Request) -> ProjectManager:
     return request.app.state.project_manager
+
+
+def get_audit_workspace_service(request: Request) -> AuditWorkspaceService:
+    return request.app.state.audit_workspace_service

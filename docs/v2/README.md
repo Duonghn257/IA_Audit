@@ -1,11 +1,10 @@
 # Operation Report Jedi — Delivery Hub
 
-> Cập nhật: 03/08/2026
+> Cập nhật: 10/08/2026
 > Trạng thái tổng thể: POC end-to-end đã chạy; đang chốt browser E2E và UAT
 
 Đây là điểm bắt đầu để xem project đang ở đâu và nên làm gì tiếp theo. Tài liệu
-được tách thành ba nhóm rõ ràng: trạng thái hiện tại, roadmap, và kiến trúc tham
-khảo.
+được tách thành trạng thái hiện tại, roadmap, SRS UAT và kiến trúc tham khảo.
 
 ## Trạng thái nhanh
 
@@ -30,11 +29,26 @@ khảo.
 Acceptance criteria và thứ tự dependency nằm tại
 [Delivery Roadmap](roadmap/README.md).
 
+Baseline yêu cầu mới cho luồng UAT local upload → background discovery → issue
+review → background Audit → versioned DOCX nằm tại
+[Software Requirements Specification](SOFTWARE_REQUIREMENTS_SPECIFICATION.md).
+Estimation, staffing assumptions, milestones và critical dependencies cho
+release 15/09/2026 nằm tại [UAT Release Estimation Plan](UAT_ESTIMATION_PLAN.md).
+Checklist triển khai riêng cho Backend/AI, bao gồm thứ tự dependency và effort
+còn lại, nằm tại
+[Backend and AI UAT Implementation Checklist](BACKEND_AI_IMPLEMENTATION_CHECKLIST.md).
+Danh sách AWS services, roles và IAM permissions để xin UAT environment nằm tại
+[AWS UAT Access Request](AWS_UAT_ACCESS_REQUEST.md).
+
 ## Cấu trúc tài liệu
 
 ```text
 docs/v2/
 ├── README.md
+├── SOFTWARE_REQUIREMENTS_SPECIFICATION.md
+├── UAT_ESTIMATION_PLAN.md
+├── BACKEND_AI_IMPLEMENTATION_CHECKLIST.md
+├── AWS_UAT_ACCESS_REQUEST.md
 ├── status/
 │   ├── FRONTEND.md
 │   ├── BACKEND.md
@@ -69,6 +83,17 @@ criteria. Đây là nơi duy nhất ghi danh sách công việc tương lai.
 
 Dùng để giải thích target architecture, boundaries và design patterns. Các file
 này không phải báo cáo tiến độ và không nên được đọc trước status/roadmap.
+
+### `SOFTWARE_REQUIREMENTS_SPECIFICATION.md` — baseline UAT
+
+Dùng để quản lý requirement ID, acceptance criteria, release `UAT-R1..R4` và
+project version semantics. SRS mô tả target cần nghiệm thu, không phải trạng thái
+đã triển khai.
+
+### `UAT_ESTIMATION_PLAN.md` — kế hoạch release
+
+Dùng để theo dõi person-day estimate, staffing assumptions, delivery dates,
+release gates và dependency cho deadline 15/09/2026.
 
 ## Baseline đã xác minh
 

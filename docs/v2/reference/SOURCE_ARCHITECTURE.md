@@ -5,6 +5,12 @@
 > **Phạm vi:** Backend, frontend, integration boundaries và deployment evolution
 > **Liên quan:** [Target Architecture](TARGET_ARCHITECTURE.md) · [Frontend Status](../status/FRONTEND.md)
 
+> **UAT scope note (10/08/2026):** [SRS UAT](../SOFTWARE_REQUIREMENTS_SPECIFICATION.md)
+> và [UAT Target Architecture](TARGET_ARCHITECTURE.md) là authority cho luồng
+> local-only, explicit Find candidates/Audit commands và project version history.
+> Các SharePoint/production adapter trong tài liệu này chỉ là future extension,
+> không thuộc UAT acceptance scope.
+
 ## 1. Kết luận thiết kế
 
 Hệ thống được phát triển dưới dạng **modular monolith có background
@@ -86,11 +92,13 @@ Các module hiện có:
 | `backend/app/infrastructure/project_repository.py` | Project/status/event persistence | SQLAlchemy; hỗ trợ PostgreSQL và SQLite local |
 | `backend/app/infrastructure/project_storage.py` | Raw input/output local storage | Production đổi sang encrypted S3/object storage |
 | `backend/app/application/run_manager.py` | Compatibility run execution | Legacy `/runs` vẫn in-memory |
-| `backend/app/pipeline/parsers.py` | Parse DOCX/PDF/XLSX | Gắn trực tiếp với `Path`, output chưa có provenance đủ chi tiết |
-| `backend/app/pipeline/llm.py` | Anthropic client, retry, JSON parsing | Chưa có provider port/Bedrock adapter |
-| `backend/app/pipeline/prompts/*` | Prompt use cases | Prompt/schema/version chưa được quản lý như artefact |
-| `backend/app/pipeline/render.py` | DOCX rendering | Chưa có object-storage/output adapter |
-| `backend/app/pipeline/versioning.py` | Tạo `Output/v0.N` | Không an toàn khi có concurrent workers |
+| `backend/app/documents/parsers.py` | Parse DOCX/PDF/XLSX | Gắn trực tiếp với `Path`, output chưa có provenance đủ chi tiết |
+| `backend/app/ai/client.py` | Anthropic client, retry, JSON parsing | Chưa có provider port/Bedrock adapter |
+| `backend/app/ai/prompts/*` | Prompt use cases | Prompt/schema/version chưa được quản lý như artefact |
+| `backend/app/ai/validation.py` | Rule-based validation cho AI draft | Chưa có candidate citation/scope gates của UAT |
+| `backend/app/documents/render.py` | DOCX rendering | Chưa có object-storage/output adapter |
+| `backend/app/application/pipeline_versioning.py` | Tạo `Output/v0.N` cho compatibility pipeline | Không an toàn khi có concurrent workers; sẽ được thay bằng audit-version persistence |
+| `backend/app/rag/context.py` | Role-tagged context assembly | Chưa có chunk index, retrieval hoặc provenance-aware context builder |
 | `frontend/src/*` | Vue Projects workspace, upload, SSE progress và download | POC single-screen; coverage tự động còn mỏng |
 | `frontend/nginx.conf` | Phục vụ SPA, proxy API/SSE và giới hạn upload 1 GB | Chưa có TLS/auth ở POC |
 | `backend/alembic/*` | Initial PostgreSQL/SQLite schema revision `20260729_01` | Mới có initial migration |
