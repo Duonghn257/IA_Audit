@@ -20,6 +20,7 @@ from app.domain.audit import (
     UploadFileInput,
     UploadFileRecord,
     UploadFileValidation,
+    UploadSessionNotFoundError,
     UploadSessionRecord,
     UploadSessionState,
 )
@@ -31,6 +32,7 @@ _ROLE_FOLDERS = {
     "Process Understanding": LogicalRole.EVIDENCE,
     "Process SOP": LogicalRole.CRITERIA,
 }
+_REQUIRED_FOLDERS = frozenset(_ROLE_FOLDERS)
 _REQUIRED_ROLES = (
     LogicalRole.SCOPE,
     LogicalRole.RISK_CONTEXT,
@@ -88,6 +90,9 @@ class AuditIntakeRepository(Protocol):
         session_id: str,
         files: Sequence[UploadFileInput],
         expires_at: datetime,
+        actor_id: str = "uat_shared_user",
+        actor_label: str = "UAT shared user",
+        actor_type: str = "UAT_SHARED",
     ) -> UploadSessionRecord: ...
 
     def get_upload_session(self, session_id: str) -> UploadSessionRecord: ...
@@ -143,7 +148,7 @@ class AuditIntakeStorage(Protocol):
     def inspect(self, object_key: str) -> StoredUpload | None: ...
 
     def materialize(
-        self, object_key: str
+        self, object_key: str, *, suffix: str = ""
     ) -> AbstractContextManager[Path]: ...
 
     def promote_uploads(
@@ -175,7 +180,12 @@ class AuditIntakeService:
         self._session_ttl = timedelta(hours=session_ttl_hours)
 
     def create_session(
-        self, files: Sequence[UploadFileDescriptor]
+        self,
+        files: Sequence[UploadFileDescriptor],
+        *,
+        actor_id: str = "uat_shared_user",
+        actor_label: str = "UAT shared user",
+        actor_type: str = "UAT_SHARED",
     ) -> UploadSessionView:
         normalized = self._validate_manifest(files)
         session_id = str(uuid4())
@@ -198,19 +208,29 @@ class AuditIntakeService:
             session_id=session_id,
             files=inputs,
             expires_at=datetime.now(timezone.utc) + self._session_ttl,
+            actor_id=actor_id,
+            actor_label=actor_label,
+            actor_type=actor_type,
         )
         return self._view(session)
 
-    def get_session(self, session_id: str) -> UploadSessionView:
-        return self._view(self._repository.get_upload_session(session_id))
+    def get_session(
+        self,
+        session_id: str,
+        *,
+        actor_id: str | None = None,
+    ) -> UploadSessionView:
+        return self._view(self._session_for_actor(session_id, actor_id))
 
     async def upload_file(
         self,
         session_id: str,
         file_id: str,
         chunks: AsyncIterable[bytes],
+        *,
+        actor_id: str | None = None,
     ) -> UploadFileView:
-        session = self._active_session(session_id)
+        session = self._active_session(session_id, actor_id)
         if session.state not in {
             UploadSessionState.UPLOADING,
             UploadSessionState.INVALID,
@@ -229,8 +249,13 @@ class AuditIntakeService:
         )
         return self._file_view(uploaded)
 
-    def validate_session(self, session_id: str) -> UploadSessionView:
-        self._active_session(session_id)
+    def validate_session(
+        self,
+        session_id: str,
+        *,
+        actor_id: str | None = None,
+    ) -> UploadSessionView:
+        self._active_session(session_id, actor_id)
         files = self._repository.list_upload_files(session_id)
         validations: list[UploadFileValidation] = []
         errors: list[dict[str, object]] = []
@@ -265,12 +290,12 @@ class AuditIntakeService:
                 )
             else:
                 content_hash = stored.content_hash
-                parser = PARSERS_BY_EXT[
-                    PurePosixPath(file.relative_path).suffix.lower()
-                ]
+                suffix = PurePosixPath(file.relative_path).suffix.lower()
+                parser = PARSERS_BY_EXT[suffix]
                 try:
                     with self._storage.materialize(
-                        file.staging_object_key
+                        file.staging_object_key,
+                        suffix=suffix,
                     ) as local_path:
                         parser(local_path)
                 except Exception as exc:  # noqa: BLE001
@@ -333,9 +358,13 @@ class AuditIntakeService:
         return self._view(session)
 
     def promote_session(
-        self, session_id: str, name: str
+        self,
+        session_id: str,
+        name: str,
+        *,
+        actor_id: str | None = None,
     ) -> PromotedProject:
-        session = self._active_session(session_id)
+        session = self._active_session(session_id, actor_id)
         if session.state != UploadSessionState.READY_TO_CREATE:
             raise AuditStateError(
                 f"Upload session {session_id} is not ready to create a project."
@@ -367,16 +396,36 @@ class AuditIntakeService:
         self._storage.discard_upload(session_id)
         return PromotedProject(project, version)
 
-    def discard_session(self, session_id: str) -> None:
+    def discard_session(
+        self,
+        session_id: str,
+        *,
+        actor_id: str | None = None,
+    ) -> None:
+        self._session_for_actor(session_id, actor_id)
         self._repository.delete_upload_session(session_id)
         self._storage.discard_upload(session_id)
 
-    def _active_session(self, session_id: str) -> UploadSessionRecord:
-        session = self._repository.get_upload_session(session_id)
+    def _active_session(
+        self,
+        session_id: str,
+        actor_id: str | None = None,
+    ) -> UploadSessionRecord:
+        session = self._session_for_actor(session_id, actor_id)
         if session.expires_at <= datetime.now(timezone.utc):
             raise AuditStateError(
                 f"Upload session {session_id} has expired."
             )
+        return session
+
+    def _session_for_actor(
+        self,
+        session_id: str,
+        actor_id: str | None,
+    ) -> UploadSessionRecord:
+        session = self._repository.get_upload_session(session_id)
+        if actor_id is not None and session.actor_id != actor_id:
+            raise UploadSessionNotFoundError(session_id)
         return session
 
     def _view(self, session: UploadSessionRecord) -> UploadSessionView:
@@ -421,20 +470,19 @@ class AuditIntakeService:
     ) -> list[UploadFileDescriptor]:
         if not files:
             raise ValueError("The uploaded folder is empty.")
-        if len(files) > self._max_files:
-            raise ValueError(
-                f"Folder contains more than {self._max_files} files."
-            )
         normalized: list[UploadFileDescriptor] = []
         seen: set[str] = set()
         total_bytes = 0
         for file in files:
             path = _normalize_relative_path(file.relative_path)
             suffix = PurePosixPath(path).suffix.lower()
-            if suffix not in _SUPPORTED_EXTENSIONS:
-                raise ValueError(
-                    f"Unsupported file type for {path}; expected DOCX, PDF or XLSX."
-                )
+            filename = PurePosixPath(path).name
+            if (
+                suffix not in _SUPPORTED_EXTENSIONS
+                or filename.startswith(("~$", ".~"))
+            ):
+                continue
+            _project_folder(path)
             if file.size_bytes <= 0:
                 raise ValueError(f"File {path} must not be empty.")
             if path in seen:
@@ -448,6 +496,14 @@ class AuditIntakeService:
                     content_type=file.content_type,
                     modified_at=file.modified_at,
                 )
+            )
+        if not normalized:
+            raise ValueError(
+                "The selected folder contains no supported DOCX, PDF or XLSX files."
+            )
+        if len(normalized) > self._max_files:
+            raise ValueError(
+                f"Folder contains more than {self._max_files} supported files."
             )
         if total_bytes > self._max_total_bytes:
             raise ValueError(
@@ -466,6 +522,23 @@ def _normalize_relative_path(raw_path: str) -> str:
     ):
         raise ValueError(f"Unsafe relative path: {raw_path!r}")
     return path.as_posix()
+
+
+def _project_folder(relative_path: str) -> tuple[str, str | None]:
+    parts = PurePosixPath(relative_path).parts
+    if len(parts) < 2:
+        raise ValueError(
+            f"File {relative_path} must be inside one of the required audit folders."
+        )
+    if parts[0] in _REQUIRED_FOLDERS:
+        return parts[0], None
+    if len(parts) >= 3 and parts[1] in _REQUIRED_FOLDERS:
+        return parts[1], parts[0]
+    invalid = parts[1] if len(parts) >= 3 else parts[0]
+    raise ValueError(
+        f"Invalid audit folder {invalid!r} in {relative_path}; expected AWP, "
+        "APM, Process SOP or Process Understanding."
+    )
 
 
 def _logical_role(relative_path: str) -> LogicalRole:

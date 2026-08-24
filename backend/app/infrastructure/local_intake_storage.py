@@ -5,7 +5,7 @@ import hashlib
 import os
 import shutil
 from collections.abc import AsyncIterable, Sequence
-from contextlib import nullcontext
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 from uuid import uuid4
@@ -86,11 +86,25 @@ class LocalAuditIntakeStorage:
             content_hash=f"sha256:{digest.hexdigest()}",
         )
 
-    def materialize(self, object_key: str):
+    @contextmanager
+    def materialize(self, object_key: str, *, suffix: str = ""):
         path = self._object_path(object_key)
         if not path.is_file():
             raise FileNotFoundError(object_key)
-        return nullcontext(path)
+        materialized = path
+        if suffix:
+            materialized = path.with_name(
+                f".{path.name}.{uuid4().hex}{suffix}"
+            )
+            try:
+                os.link(path, materialized)
+            except OSError:
+                shutil.copy2(path, materialized)
+        try:
+            yield materialized
+        finally:
+            if materialized != path:
+                materialized.unlink(missing_ok=True)
 
     def promote_uploads(
         self,

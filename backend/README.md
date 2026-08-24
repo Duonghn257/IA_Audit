@@ -95,9 +95,48 @@ uvicorn api:app \
 
 Useful URLs:
 
+- API test UI: `http://127.0.0.1:8000/tests-ui/`
 - OpenAPI: `http://127.0.0.1:8000/openapi.json`
 - Swagger UI: `http://127.0.0.1:8000/docs`
 - Health: `http://127.0.0.1:8000/api/v1/health`
+
+## Google login and browser sessions
+
+Configure a Google OAuth Web client and register the callback URL exactly as an
+Authorized redirect URI in Google Cloud. For local port 8000:
+
+```dotenv
+GOOGLE_CLIENT_ID=<google_oauth_web_client_id>
+GOOGLE_CLIENT_SECRET=<google_oauth_web_client_secret>
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/v1/auth/google/callback
+AUTH_POST_LOGIN_REDIRECT=/tests-ui/
+AUTH_SESSION_TTL_HOURS=12
+AUTH_COOKIE_SECURE=false
+```
+
+For HTTPS environments, set `AUTH_COOKIE_SECURE=true`. Optionally restrict login
+to Google Workspace domains with `GOOGLE_ALLOWED_DOMAINS=example.com`.
+
+Apply the auth migration before starting a migrated environment:
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+The backend uses Google Authorization Code + PKCE, verifies the OpenID Connect
+ID token, then creates an opaque server-side session. Google access and refresh
+tokens are not stored. Browser writes must send the CSRF token returned by
+`GET /api/v1/auth/me` in the `X-CSRF-Token` header.
+
+Auth endpoints:
+
+```text
+GET  /api/v1/auth/google/login
+GET  /api/v1/auth/google/callback
+GET  /api/v1/auth/me
+POST /api/v1/auth/logout
+```
 
 Upload a project folder:
 

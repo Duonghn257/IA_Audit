@@ -30,6 +30,8 @@ def test_migrations_create_uat_workspace_schema(tmp_path, monkeypatch) -> None:
     assert set(schema.get_table_names()) == {
         "alembic_version",
         "audit_input_snapshots",
+        "auth_sessions",
+        "auth_users",
         "issue_source_refs",
         "issues",
         "job_events",
@@ -50,6 +52,9 @@ def test_migrations_create_uat_workspace_schema(tmp_path, monkeypatch) -> None:
         "ix_projects_status",
         "uq_projects_name",
     }
+    assert schema.get_foreign_keys("auth_sessions")[0][
+        "referred_table"
+    ] == "auth_users"
     assert schema.get_foreign_keys("project_events")[0][
         "referred_table"
     ] == "projects"

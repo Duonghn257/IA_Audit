@@ -20,6 +20,22 @@ class ApiSettings:
     raw_retention_days: int = 7
     upload_max_files: int = 20
     upload_max_bytes: int = 100_000_000
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    google_redirect_uri: str | None = None
+    google_allowed_domains: tuple[str, ...] = ()
+    auth_post_login_redirect: str = "/tests-ui/"
+    auth_session_ttl_hours: int = 12
+    auth_cookie_name: str = "audit_session"
+    auth_cookie_secure: bool = False
+
+    @property
+    def google_auth_enabled(self) -> bool:
+        return bool(
+            self.google_client_id
+            and self.google_client_secret
+            and self.google_redirect_uri
+        )
 
 
 def load_api_settings() -> ApiSettings:
@@ -69,6 +85,43 @@ def load_api_settings() -> ApiSettings:
             )
         ),
     )
+    google_client_id = os.environ.get("GOOGLE_CLIENT_ID") or None
+    google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET") or None
+    google_redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI") or None
+    google_values = (
+        google_client_id,
+        google_client_secret,
+        google_redirect_uri,
+    )
+    if any(google_values) and not all(google_values):
+        raise RuntimeError(
+            "GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and "
+            "GOOGLE_REDIRECT_URI must be configured together."
+        )
+    google_allowed_domains = tuple(
+        value.strip().lower()
+        for value in os.environ.get("GOOGLE_ALLOWED_DOMAINS", "").split(",")
+        if value.strip()
+    )
+    auth_post_login_redirect = os.environ.get(
+        "AUTH_POST_LOGIN_REDIRECT",
+        "/tests-ui/",
+    )
+    auth_session_ttl_hours = max(
+        1,
+        int(os.environ.get("AUTH_SESSION_TTL_HOURS", "12")),
+    )
+    auth_cookie_name = os.environ.get(
+        "AUTH_COOKIE_NAME",
+        "audit_session",
+    ).strip() or "audit_session"
+    secure_default = bool(
+        google_redirect_uri and google_redirect_uri.startswith("https://")
+    )
+    auth_cookie_secure = os.environ.get(
+        "AUTH_COOKIE_SECURE",
+        "true" if secure_default else "false",
+    ).strip().lower() in {"1", "true", "yes", "on"}
     return ApiSettings(
         repository_root=repository_root,
         backend_root=backend_root,
@@ -80,4 +133,12 @@ def load_api_settings() -> ApiSettings:
         raw_retention_days=raw_retention_days,
         upload_max_files=upload_max_files,
         upload_max_bytes=upload_max_bytes,
+        google_client_id=google_client_id,
+        google_client_secret=google_client_secret,
+        google_redirect_uri=google_redirect_uri,
+        google_allowed_domains=google_allowed_domains,
+        auth_post_login_redirect=auth_post_login_redirect,
+        auth_session_ttl_hours=auth_session_ttl_hours,
+        auth_cookie_name=auth_cookie_name,
+        auth_cookie_secure=auth_cookie_secure,
     )

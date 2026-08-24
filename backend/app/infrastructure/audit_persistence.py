@@ -192,7 +192,17 @@ def as_utc(value: datetime | None) -> datetime | None:
 
 
 def to_upload_session_record(model: UploadSessionModel) -> UploadSessionRecord:
-    return UploadSessionRecord(model.session_id, UploadSessionState(model.state), as_utc(model.created_at), as_utc(model.expires_at), model.validation_report, as_utc(model.promoted_at))
+    return UploadSessionRecord(
+        session_id=model.session_id,
+        state=UploadSessionState(model.state),
+        actor_id=model.actor_id,
+        actor_label=model.actor_label,
+        actor_type=model.actor_type,
+        created_at=as_utc(model.created_at),
+        expires_at=as_utc(model.expires_at),
+        validation_report=model.validation_report,
+        promoted_at=as_utc(model.promoted_at),
+    )
 
 
 def to_upload_file_record(model) -> UploadFileRecord:

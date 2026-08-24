@@ -5,6 +5,7 @@ from app.bootstrap.api import create_app
 from app.core.settings import ApiSettings
 from docx import Document
 from fastapi.testclient import TestClient
+from openpyxl import Workbook
 
 _CONTENT_TYPE = (
     "application/vnd.openxmlformats-officedocument."
@@ -17,6 +18,14 @@ def _docx_bytes(text: str) -> bytes:
     document.add_paragraph(text)
     stream = BytesIO()
     document.save(stream)
+    return stream.getvalue()
+
+
+def _xlsx_bytes(text: str) -> bytes:
+    workbook = Workbook()
+    workbook.active.append([text])
+    stream = BytesIO()
+    workbook.save(stream)
     return stream.getvalue()
 
 
@@ -36,7 +45,7 @@ def _settings(tmp_path: Path) -> ApiSettings:
 
 def _valid_files() -> dict[str, bytes]:
     return {
-        "AWP/scope.docx": _docx_bytes("Approved audit scope"),
+        "AWP/scope.xlsx": _xlsx_bytes("Approved audit scope"),
         "APM/risk.docx": _docx_bytes("Planning risk context"),
         "Process Understanding/evidence.docx": _docx_bytes(
             "Observed process evidence"
@@ -144,7 +153,8 @@ def test_local_upload_session_validates_and_creates_v01(
     )
     assert {
         path.relative_to(source_root).as_posix()
-        for path in source_root.rglob("*.docx")
+        for path in source_root.rglob("*")
+        if path.is_file()
     } == set(payloads)
     assert not (
         tmp_path
@@ -221,7 +231,7 @@ def test_upload_rejects_size_mismatch_and_discard_removes_session(
         )
 
 
-def test_upload_manifest_rejects_unsafe_or_unsupported_paths(
+def test_upload_manifest_rejects_unsafe_or_incorrect_folder_names(
     tmp_path: Path,
 ) -> None:
     app = create_app(settings=_settings(tmp_path))
@@ -239,20 +249,64 @@ def test_upload_manifest_rejects_unsafe_or_unsupported_paths(
                 ]
             },
         )
-        unsupported = client.post(
+        incorrect_folder = client.post(
             "/api/v1/upload-sessions",
             json={
                 "files": [
                     {
-                        "relative_path": "AWP/scope.txt",
+                        "relative_path": "audit-project/AWp/scope.docx",
                         "size_bytes": 1,
-                        "content_type": "text/plain",
+                        "content_type": _CONTENT_TYPE,
                     }
                 ]
             },
         )
 
     assert unsafe.status_code == 422
-    assert unsupported.status_code == 422
+    assert incorrect_folder.status_code == 422
     assert unsafe.json()["error"]["code"] == "INVALID_REQUEST"
-    assert unsupported.json()["error"]["code"] == "INVALID_REQUEST"
+    assert incorrect_folder.json()["error"]["code"] == "INVALID_REQUEST"
+
+
+def test_upload_manifest_ignores_unsupported_files(tmp_path: Path) -> None:
+    app = create_app(settings=_settings(tmp_path))
+    supported = _docx_bytes("Approved audit scope")
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/upload-sessions",
+            json={
+                "files": [
+                    {
+                        "relative_path": "audit-project/AWP/scope.docx",
+                        "size_bytes": len(supported),
+                        "content_type": _CONTENT_TYPE,
+                    },
+                    {
+                        "relative_path": "audit-project/.DS_Store",
+                        "size_bytes": 24,
+                        "content_type": "application/octet-stream",
+                    },
+                    {
+                        "relative_path": "audit-project/APM/notes.txt",
+                        "size_bytes": 12,
+                        "content_type": "text/plain",
+                    },
+                    {
+                        "relative_path": "audit-project/AWP/~$draft.docx",
+                        "size_bytes": 162,
+                        "content_type": _CONTENT_TYPE,
+                    },
+                    {
+                        "relative_path": "audit-project/AWP/.~draft.docx",
+                        "size_bytes": 162,
+                        "content_type": _CONTENT_TYPE,
+                    },
+                ]
+            },
+        )
+
+    assert response.status_code == 201, response.text
+    assert [item["relative_path"] for item in response.json()["files"]] == [
+        "audit-project/AWP/scope.docx"
+    ]

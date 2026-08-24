@@ -13,6 +13,10 @@ Thumbs.db
 .claude/
 .gitnexus
 *data/
-/design/
+design/
 *.docx
 backend/.runtime/
+
+# OAuth client credentials must stay outside source control.
+client_secret*.json
+client_secret_*.apps.googleusercontent.com.json

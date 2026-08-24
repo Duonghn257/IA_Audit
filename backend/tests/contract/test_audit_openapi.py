@@ -25,6 +25,10 @@ def test_openapi_publishes_v2_workspace_contract(tmp_path: Path) -> None:
     }
     assert "post" in paths["/api/v1/projects/{project_id}/versions/{version_id}/audit-jobs"]
     assert "get" in paths["/api/v1/jobs/{job_id}/events/stream"]
+    assert "get" in paths["/api/v1/auth/google/login"]
+    assert "get" in paths["/api/v1/auth/google/callback"]
+    assert "get" in paths["/api/v1/auth/me"]
+    assert "post" in paths["/api/v1/auth/logout"]
     assert "post" in paths["/api/v1/upload-sessions"]
     assert "put" in paths[
         "/api/v1/upload-sessions/{session_id}/files/{file_id}"

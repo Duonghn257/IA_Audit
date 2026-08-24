@@ -6,7 +6,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, status
 
 from app.api.audit_errors import audit_api_errors, feature_unavailable
-from app.api.dependencies import get_audit_intake_service
+from app.api.dependencies import (
+    CurrentPrincipalDependency,
+    get_audit_intake_service,
+)
 from app.api.schemas.upload_sessions import (
     CreateProjectFromUploadRequest,
     CreateProjectFromUploadResponse,
@@ -34,6 +37,7 @@ AuditIntakeDependency = Annotated[
 def create_upload_session(
     request: CreateUploadSessionRequest,
     service: AuditIntakeDependency,
+    principal: CurrentPrincipalDependency,
 ) -> UploadSessionResponse:
     with audit_api_errors():
         view = service.create_session(
@@ -45,7 +49,10 @@ def create_upload_session(
                     modified_at=file.modified_at,
                 )
                 for file in request.files
-            ]
+            ],
+            actor_id=principal.user.user_id,
+            actor_label=principal.user.display_name,
+            actor_type=principal.user.provider,
         )
         return UploadSessionResponse.from_view(view)
 
@@ -59,12 +66,14 @@ async def upload_session_file(
     file_id: str,
     request: Request,
     service: AuditIntakeDependency,
+    principal: CurrentPrincipalDependency,
 ) -> UploadFileResponse:
     with audit_api_errors():
         view = await service.upload_file(
             session_id,
             file_id,
             request.stream(),
+            actor_id=principal.user.user_id,
         )
         return UploadFileResponse.from_view(view)
 
@@ -76,10 +85,14 @@ async def upload_session_file(
 def get_upload_session(
     session_id: str,
     service: AuditIntakeDependency,
+    principal: CurrentPrincipalDependency,
 ) -> UploadSessionResponse:
     with audit_api_errors():
         return UploadSessionResponse.from_view(
-            service.get_session(session_id)
+            service.get_session(
+                session_id,
+                actor_id=principal.user.user_id,
+            )
         )
 
 
@@ -90,10 +103,14 @@ def get_upload_session(
 def validate_upload_session(
     session_id: str,
     service: AuditIntakeDependency,
+    principal: CurrentPrincipalDependency,
 ) -> UploadSessionResponse:
     with audit_api_errors():
         return UploadSessionResponse.from_view(
-            service.validate_session(session_id)
+            service.validate_session(
+                session_id,
+                actor_id=principal.user.user_id,
+            )
         )
 
 
@@ -106,10 +123,15 @@ def create_project_from_upload(
     session_id: str,
     request: CreateProjectFromUploadRequest,
     service: AuditIntakeDependency,
+    principal: CurrentPrincipalDependency,
 ) -> CreateProjectFromUploadResponse:
     with audit_api_errors():
         return CreateProjectFromUploadResponse.from_result(
-            service.promote_session(session_id, request.name)
+            service.promote_session(
+                session_id,
+                request.name,
+                actor_id=principal.user.user_id,
+            )
         )
 
 
@@ -120,9 +142,13 @@ def create_project_from_upload(
 def delete_upload_session(
     session_id: str,
     service: AuditIntakeDependency,
+    principal: CurrentPrincipalDependency,
 ) -> None:
     with audit_api_errors():
-        service.discard_session(session_id)
+        service.discard_session(
+            session_id,
+            actor_id=principal.user.user_id,
+        )
 
 
 @router.get("/outputs/{output_id}/download", response_model=None)

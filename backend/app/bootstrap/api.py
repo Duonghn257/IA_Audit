@@ -6,21 +6,26 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.errors import ApiError, api_error_handler
 from app.api.middleware import CorrelationIdMiddleware
 from app.api.router import api_v1_router
+from app.api.routes.auth import callback_alias_router
+from app.application.auth_service import AuthService
 from app.application.audit_intake_service import AuditIntakeService
 from app.application.audit_workspace_service import AuditWorkspaceService
 from app.application.path_resolver import LocalPathResolver
 from app.application.project_manager import ProjectManager
 from app.application.run_manager import RunManager
 from app.core.settings import ApiSettings, load_api_settings
+from app.infrastructure.auth_repository import SqlAlchemyAuthRepository
 from app.infrastructure.audit_intake_repository import (
     SqlAlchemyAuditIntakeRepository,
 )
 from app.infrastructure.audit_repository import SqlAlchemyAuditRepository
 from app.infrastructure.database import Database
+from app.infrastructure.google_oauth import GoogleOAuthClient
 from app.infrastructure.local_intake_storage import (
     LocalAuditIntakeStorage,
 )
@@ -38,6 +43,8 @@ def create_app(
     project_manager: ProjectManager | None = None,
     audit_workspace_service: AuditWorkspaceService | None = None,
     audit_intake_service: AuditIntakeService | None = None,
+    auth_service: AuthService | None = None,
+    google_oauth_client: GoogleOAuthClient | None = None,
 ) -> FastAPI:
     runtime_settings = settings or load_api_settings()
     runtime_manager = run_manager or RunManager(
@@ -90,6 +97,22 @@ def create_app(
     else:
         runtime_audit_intake_service = audit_intake_service
 
+    if database is None:
+        database = Database(runtime_settings.database_url)
+        database.create_schema()
+    runtime_auth_service = auth_service or AuthService(
+        SqlAlchemyAuthRepository(database.sessions),
+        session_ttl_hours=runtime_settings.auth_session_ttl_hours,
+    )
+    runtime_google_oauth_client = google_oauth_client
+    if runtime_google_oauth_client is None and runtime_settings.google_auth_enabled:
+        runtime_google_oauth_client = GoogleOAuthClient(
+            client_id=runtime_settings.google_client_id or "",
+            client_secret=runtime_settings.google_client_secret or "",
+            redirect_uri=runtime_settings.google_redirect_uri or "",
+            allowed_domains=runtime_settings.google_allowed_domains,
+        )
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         project_service = app.state.project_manager
@@ -118,6 +141,8 @@ def create_app(
     application.state.audit_intake_service = (
         runtime_audit_intake_service
     )
+    application.state.auth_service = runtime_auth_service
+    application.state.google_oauth_client = runtime_google_oauth_client
     application.state.database = database
     application.state.path_resolver = LocalPathResolver(runtime_settings)
     application.add_exception_handler(ApiError, api_error_handler)
@@ -130,4 +155,12 @@ def create_app(
         allow_headers=["*"],
     )
     application.include_router(api_v1_router)
+    application.include_router(callback_alias_router)
+    tests_ui_root = runtime_settings.backend_root / "tests-ui"
+    if tests_ui_root.is_dir():
+        application.mount(
+            "/tests-ui",
+            StaticFiles(directory=tests_ui_root, html=True),
+            name="tests-ui",
+        )
     return application

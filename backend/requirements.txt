@@ -1,6 +1,8 @@
 anthropic
 alembic
 fastapi
+google-auth
+requests
 uvicorn[standard]
 sqlalchemy
 psycopg[binary]

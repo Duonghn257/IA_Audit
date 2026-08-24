@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audit Report API Test UI</title>
+  <style>
+    :root{--gold:#f7b900;--gold-deep:#9a6500;--ink:#171714;--muted:#6f6a60;--line:#e5dfd3;--paper:#f7f4ed;--card:#fff;--green:#087b50;--green-bg:#eaf7f0;--red:#bd302d;--red-bg:#fff0ef;--shadow:0 14px 40px rgba(31,25,15,.08)}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}button,input{font:inherit}button{cursor:pointer}.hidden{display:none!important}
+    .topbar{height:92px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 42px;gap:22px}.brand{display:flex;align-items:center}.brand-logo{display:block;width:270px;height:auto;max-height:62px;object-fit:contain;object-position:left center}.divider{height:45px;width:1px;background:var(--line)}.product b{display:block;font-size:18px}.product span{color:var(--muted)}.top-actions{margin-left:auto;display:flex;align-items:center;gap:14px}.env,.pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;padding:8px 13px;background:#fff}.dot{width:8px;height:8px;border-radius:50%;background:var(--green)}.avatar{width:34px;height:34px;border-radius:50%;background:#f5e4ae;object-fit:cover}.user-copy{line-height:1.2}.user-copy small{display:block;color:var(--muted)}
+    .btn{border:1px solid var(--line);border-radius:11px;background:#fff;padding:11px 17px;font-weight:700;color:var(--ink)}.btn:hover{filter:brightness(.98)}.btn-primary{background:var(--gold);border-color:#dea400}.btn-danger{color:var(--red)}.btn:disabled{cursor:not-allowed;opacity:.45}.shell{max-width:1440px;margin:0 auto;padding:50px 36px}.eyebrow{font-size:12px;letter-spacing:.18em;font-weight:800;color:var(--gold-deep)}h1{font-size:43px;line-height:1.05;margin:10px 0 8px;letter-spacing:-.035em}h2{margin:0;font-size:22px}.subtitle{color:var(--muted);margin:0}.hero{display:flex;align-items:end;justify-content:space-between;gap:24px}.stats{margin-top:34px;display:grid;grid-template-columns:repeat(4,1fr);background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}.stat{padding:18px 22px;border-right:1px solid var(--line)}.stat:last-child{border:0}.stat span{display:block;color:var(--muted);font-size:13px}.stat strong{font-size:27px}.panel{margin-top:26px;background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}.panel-head{padding:22px 26px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}.table-head,.project-row{display:grid;grid-template-columns:minmax(320px,2fr) 130px 180px 180px 30px;gap:18px;align-items:center;padding:17px 26px}.table-head{color:var(--muted);font-size:13px;border-bottom:1px solid var(--line)}.project-row{border-bottom:1px solid var(--line)}.project-row:last-child{border:0}.project-name{font-weight:750}.project-name small{display:block;color:var(--muted);font-weight:400;margin-top:4px}.status{display:inline-flex;width:max-content;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.04em;background:#f1efe9}.status.good{color:var(--green);background:var(--green-bg)}.status.bad{color:var(--red);background:var(--red-bg)}.empty{padding:58px;text-align:center;color:var(--muted)}
+    .login-wrap{min-height:calc(100vh - 92px);display:grid;place-items:center;padding:40px}.login-card{width:min(520px,100%);background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);padding:42px}.login-card h1{font-size:34px}.google{width:100%;margin-top:28px;display:flex;justify-content:center;align-items:center;gap:10px}.gmark{font-weight:900;color:#4285f4}.notice{margin-top:18px;border-radius:11px;padding:12px 14px;background:var(--red-bg);color:var(--red)}.ignore-notice{margin-top:12px;border-radius:11px;padding:11px 14px;background:#fff8df;color:#765000;font-size:13px}
+    .overlay{position:fixed;inset:0;background:rgba(20,19,16,.55);display:grid;place-items:center;padding:28px;z-index:10}.modal{width:min(940px,100%);max-height:calc(100vh - 56px);overflow:auto;background:#fff;border-radius:20px;box-shadow:0 30px 90px rgba(0,0,0,.25)}.modal-head{padding:27px 32px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:24px}.steps{display:flex;align-items:center;gap:10px}.step{display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:700}.step i{font-style:normal;width:32px;height:32px;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center}.step.active{color:var(--ink)}.step.active i{background:#fff1b9;border-color:var(--gold)}.step.done i{background:var(--green);border-color:var(--green);color:#fff}.step-line{height:1px;width:48px;background:var(--line)}.modal-body{padding:28px 32px}.field label{display:block;font-weight:700;margin-bottom:8px}.input{width:100%;border:1px solid #dcd5c9;border-radius:10px;padding:13px 14px;outline:none}.input:focus{border-color:var(--gold)}.drop{margin-top:20px;border:2px dashed #dfa900;border-radius:15px;background:#fffbf0;padding:42px 20px;text-align:center}.drop strong{display:block;font-size:19px}.drop span{color:var(--muted)}.folder-input{position:absolute;opacity:0;pointer-events:none}.file-meta{display:grid;grid-template-columns:repeat(3,1fr);margin-top:14px;border:1px solid var(--line);border-radius:12px}.file-meta div{padding:13px;text-align:center;border-right:1px solid var(--line)}.file-meta div:last-child{border:0}.progress{height:8px;background:#eee9df;border-radius:99px;overflow:hidden;margin-top:18px}.progress div{height:100%;background:var(--gold);width:0;transition:width .2s}.validation-banner{padding:16px;border:1px solid #a8dcc6;background:var(--green-bg);border-radius:12px;color:var(--green);font-weight:700}.validation-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:17px}.subcard{border:1px solid var(--line);border-radius:13px;padding:19px}.check-row,.folder-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #eee9e0}.check-row:last-child,.folder-row:last-child{border:0}.check{color:var(--green);font-weight:800}.errors{margin-top:14px}.error-row{background:var(--red-bg);color:var(--red);padding:10px 12px;border-radius:9px;margin-top:8px}.warning-row{background:#fff8df;color:#765000;padding:10px 12px;border-radius:9px;margin-top:8px}.modal-foot{padding:20px 32px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:12px}.spacer{flex:1}.loading{opacity:.65;pointer-events:none}@media(max-width:850px){.company{display:none}.shell{padding:32px 18px}.hero{align-items:start;flex-direction:column}.stats{grid-template-columns:1fr 1fr}.table-head{display:none}.project-row{grid-template-columns:1fr 100px}.project-row>*:nth-child(3),.project-row>*:nth-child(4){display:none}.validation-grid{grid-template-columns:1fr}.modal-head{flex-direction:column}.topbar{padding:0 18px}}
+    .drop{padding:28px;display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:16px;text-align:left;transition:border-color .15s,background .15s}.drop:hover{background:#fff8e7}.drop.selected{border-style:solid;background:#fffdf7}.folder-icon{width:48px;height:48px;border-radius:13px;background:#ffedaa;color:#8b5b00!important;display:grid;place-items:center;font-size:24px;font-weight:800}.folder-copy{min-width:0}.drop strong{font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.drop .folder-help{display:block;color:var(--muted);margin-top:3px}.drop .drop-action{border:1px solid #d8cfbf;border-radius:10px;background:#fff;padding:9px 12px;font-weight:750;white-space:nowrap;color:var(--ink)}.format-note{margin:12px 2px 0;color:var(--muted);font-size:13px}.file-meta{background:#fff}.folder-checks{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}.folder-check{border:1px solid var(--line);border-radius:10px;padding:10px 11px;background:#fff;color:var(--muted);font-size:13px}.folder-check.ready{border-color:#a8dcc6;background:var(--green-bg);color:var(--green)}.folder-check b{display:block;color:var(--ink);font-size:13px;margin-bottom:2px}@media(max-width:850px){.brand-logo{width:185px}.folder-checks{grid-template-columns:1fr 1fr}.drop{grid-template-columns:42px 1fr}.drop-action{grid-column:1/-1;text-align:center}}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img class="brand-logo" src="./logo.png" alt="City Developments Limited"></div>
+    <div class="divider"></div><div class="product"><b>Audit Report</b><span>API test workspace</span></div>
+    <div class="top-actions"><span class="env"><span class="dot"></span>UAT environment</span><div id="userArea" class="hidden"></div></div>
+  </header>
+
+  <main id="loginView" class="login-wrap hidden">
+    <section class="login-card"><div class="eyebrow">INTERNAL AUDIT OPERATIONS</div><h1>Sign in to continue</h1><p class="subtitle">Use your Google account while the corporate Microsoft Entra ID integration is being prepared.</p><button id="loginButton" class="btn google"><span class="gmark">G</span> Continue with Google</button><div id="loginError" class="notice hidden"></div></section>
+  </main>
+
+  <main id="appView" class="shell hidden">
+    <section class="hero"><div><div class="eyebrow">INTERNAL AUDIT OPERATIONS</div><h1>Project workspace</h1><p class="subtitle">Validate local audit artefacts and create immutable project snapshots.</p></div><button id="newProjectButton" class="btn btn-primary">＋ New project</button></section>
+    <section class="stats"><div class="stat"><span>Ready for discovery</span><strong id="readyCount">0</strong></div><div class="stat"><span>Needs review</span><strong id="reviewCount">0</strong></div><div class="stat"><span>Output available</span><strong id="outputCount">0</strong></div><div class="stat"><span>Needs attention</span><strong id="attentionCount">0</strong></div></section>
+    <section class="panel"><div class="panel-head"><h2>Projects</h2><button id="refreshButton" class="btn">Refresh</button></div><div class="table-head"><span>Project</span><span>Version</span><span>Stage</span><span>Updated</span><span></span></div><div id="projectList"><div class="empty">Loading projects…</div></div></section>
+  </main>
+
+  <div id="projectModal" class="overlay hidden">
+    <section class="modal">
+      <header class="modal-head"><div><div class="eyebrow">NEW AUDIT PROJECT</div><h2 id="modalTitle">Upload artefacts</h2><p class="subtitle" id="modalSubtitle">Select a complete local audit folder.</p></div><div class="steps"><span id="stepOne" class="step active"><i>1</i>Upload</span><span class="step-line"></span><span id="stepTwo" class="step"><i>2</i>Validate & create</span></div></header>
+      <div id="uploadStep" class="modal-body">
+        <div class="field"><label for="projectName">Project name</label><input id="projectName" class="input" maxlength="255" placeholder="Project name"></div>
+        <label id="folderDrop" class="drop" for="folderPicker"><span class="folder-icon">↑</span><span class="folder-copy"><strong id="folderLabel">Select project folder</strong><span id="folderHelp" class="folder-help">Must contain the four required folders with exact names.</span></span><span id="folderAction" class="drop-action">Browse folder</span></label>
+        <input id="folderPicker" class="folder-input" type="file" webkitdirectory directory multiple>
+        <p class="format-note">Required: AWP, APM, Process SOP, Process Understanding · Reads DOCX, PDF and XLSX only</p>
+        <div id="fileMeta" class="file-meta hidden"><div id="fileCount">0 supported files</div><div id="fileSize">0 MB</div><div id="ignoredCount">0 ignored</div></div>
+        <div id="folderChecks" class="folder-checks hidden"></div>
+        <div id="ignoredNotice" class="ignore-notice hidden"></div>
+        <div id="uploadProgress" class="hidden"><div class="progress"><div id="progressBar"></div></div><p id="progressText" class="subtitle">Preparing upload…</p></div>
+        <div id="uploadError" class="notice hidden"></div>
+      </div>
+      <div id="validateStep" class="modal-body hidden"><div id="validationBanner" class="validation-banner"></div><div class="validation-grid"><section class="subcard"><h2>Folder tree</h2><div id="folderTree"></div></section><section class="subcard"><h2>Validation</h2><div id="validationRows"></div></section></div><div id="validationMessages" class="errors"></div><p class="subtitle" style="margin-top:16px">Source files become read-only after project creation.</p></div>
+      <footer class="modal-foot"><button id="cancelButton" class="btn">Cancel</button><span class="spacer"></span><button id="backButton" class="btn hidden">Back</button><button id="continueButton" class="btn btn-primary" disabled>Upload & continue</button><button id="createButton" class="btn btn-primary hidden">Create project</button></footer>
+    </section>
+  </div>
+
+  <script>
+    const state={csrf:'',user:null,authEnabled:false,files:[],ignoredFiles:[],selectionValid:false,uploadSession:null,validation:null,busy:false};
+    const requiredFolders=['AWP','APM','Process SOP','Process Understanding'];
+    const supportedExtensions=['.docx','.pdf','.xlsx'];
+    const $=id=>document.getElementById(id);
+    const unsafe=new Set(['POST','PUT','PATCH','DELETE']);
+    const escapeHtml=value=>String(value??'').replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+    async function api(path,options={}){const method=(options.method||'GET').toUpperCase();const headers=new Headers(options.headers||{});if(unsafe.has(method)&&state.csrf)headers.set('X-CSRF-Token',state.csrf);if(options.body&&typeof options.body==='string'&&!headers.has('Content-Type'))headers.set('Content-Type','application/json');const response=await fetch(`/api/v1${path}`,{...options,method,headers,credentials:'include'});if(response.status===401){showLogin();throw new Error('Sign in is required.')}if(!response.ok){let message=`Request failed (${response.status})`;try{const payload=await response.json();message=payload.error?.message||message}catch{}throw new Error(message)}if(response.status===204)return null;return response.json()}
+    function showLogin(){ $('loginView').classList.remove('hidden');$('appView').classList.add('hidden');$('userArea').classList.add('hidden') }
+    function showApp(){ $('loginView').classList.add('hidden');$('appView').classList.remove('hidden');$('userArea').classList.remove('hidden') }
+    async function bootstrap(){const authError=new URLSearchParams(location.search).get('auth_error');if(authError){$('loginError').textContent=`Google login failed: ${authError}`;$('loginError').classList.remove('hidden')}try{const me=await api('/auth/me');state.csrf=me.csrf_token;state.user=me.user;state.authEnabled=me.auth_enabled;renderUser();showApp();await loadProjects()}catch(error){if(!String(error.message).includes('Sign in')){$('loginError').textContent=error.message;$('loginError').classList.remove('hidden')}showLogin()}}
+    function renderUser(){const user=state.user;const avatar=user.picture_url?`<img class="avatar" src="${escapeHtml(user.picture_url)}" alt="">`:`<div class="avatar"></div>`;$('userArea').innerHTML=`<div style="display:flex;align-items:center;gap:10px">${avatar}<div class="user-copy"><b>${escapeHtml(user.display_name)}</b><small>${escapeHtml(user.email)}</small></div>${state.authEnabled?'<button id="logoutButton" class="btn">Sign out</button>':''}</div>`;if(state.authEnabled)$('logoutButton').onclick=logout}
+    async function logout(){try{await api('/auth/logout',{method:'POST'});state.csrf='';state.user=null;showLogin()}catch(error){alert(error.message)}}
+    async function loadProjects(){$('projectList').innerHTML='<div class="empty">Loading projects…</div>';try{const projects=await api('/projects');const enriched=await Promise.all(projects.map(async project=>{if(project.version)return project;try{const versions=await api(`/projects/${project.project_id}/versions`);return{...project,version:versions.at(-1)?.label||'v0.1'}}catch{return{...project,version:'v0.1'}}}));renderProjects(enriched)}catch(error){$('projectList').innerHTML=`<div class="empty">${escapeHtml(error.message)}</div>`}}
+    function renderProjects(projects){const ready=projects.filter(p=>p.status==='READY_FOR_DISCOVERY').length;const review=projects.filter(p=>p.status==='CANDIDATES_AVAILABLE').length;const output=projects.filter(p=>['OUTPUT_AVAILABLE','COMPLETED'].includes(p.status)).length;const attention=projects.filter(p=>p.status==='FAILED').length;$('readyCount').textContent=ready;$('reviewCount').textContent=review;$('outputCount').textContent=output;$('attentionCount').textContent=attention;if(!projects.length){$('projectList').innerHTML='<div class="empty">No projects yet. Create your first audit project.</div>';return}$('projectList').innerHTML=projects.map(p=>{const cls=p.status==='FAILED'?'bad':['READY_FOR_DISCOVERY','CANDIDATES_AVAILABLE','OUTPUT_AVAILABLE','COMPLETED'].includes(p.status)?'good':'';const label=p.status.replaceAll('_',' ');return`<div class="project-row"><div class="project-name">${escapeHtml(p.name)}<small>${escapeHtml(p.current_activity||'Project created')}</small></div><b>${escapeHtml(p.version||'v0.1')}</b><span class="status ${cls}">${escapeHtml(label)}</span><span>${new Date(p.updated_at).toLocaleString()}</span><span>›</span></div>`}).join('')}
+    function openModal(){resetModal();$('projectModal').classList.remove('hidden')}
+    function closeModal(){if(state.busy)return;$('projectModal').classList.add('hidden');resetModal()}
+    function resetModal(){state.files=[];state.ignoredFiles=[];state.selectionValid=false;state.uploadSession=null;state.validation=null;state.busy=false;$('folderPicker').value='';$('projectName').value='';$('folderDrop').classList.remove('selected');$('folderLabel').textContent='Select project folder';$('folderHelp').textContent='Must contain the four required folders with exact names.';$('folderAction').textContent='Browse folder';$('fileMeta').classList.add('hidden');$('folderChecks').classList.add('hidden');$('ignoredNotice').classList.add('hidden');$('uploadProgress').classList.add('hidden');$('progressBar').style.width='0';$('uploadError').classList.add('hidden');$('uploadStep').classList.remove('hidden');$('validateStep').classList.add('hidden');$('backButton').classList.add('hidden');$('createButton').classList.add('hidden');$('continueButton').classList.remove('hidden');$('continueButton').disabled=true;$('stepOne').className='step active';$('stepTwo').className='step';$('modalTitle').textContent='Upload artefacts';$('modalSubtitle').textContent='Select a complete local audit folder.'}
+    function onFolderSelected(event) {
+      const selected = [...event.target.files];
+      state.files = [];
+      state.ignoredFiles = [];
+      state.selectionValid = false;
+      if (!selected.length) return;
+
+      const pathOf = file => file.webkitRelativePath || file.name;
+      const root = pathOf(selected[0]).split('/')[0];
+      $('projectName').value = root.replaceAll('_', ' ').replaceAll('-', ' ');
+      $('folderDrop').classList.add('selected');
+      $('folderLabel').textContent = root;
+      $('folderAction').textContent = 'Change folder';
+
+      const isOfficeTemporary = file =>
+        file.name.startsWith('~$') || file.name.startsWith('.~');
+      const isSupported = file =>
+        !isOfficeTemporary(file) &&
+        supportedExtensions.some(ext =>
+          file.name.toLowerCase().endsWith(ext)
+        );
+
+      state.ignoredFiles = selected.filter(file => !isSupported(file));
+      const candidates = selected.filter(isSupported);
+      const invalid = candidates.filter(file => {
+        const parts = pathOf(file).split('/');
+        return parts[0] !== root || !requiredFolders.includes(parts[1]);
+      });
+      state.files = candidates.filter(file => !invalid.includes(file));
+
+      const counts = Object.fromEntries(
+        requiredFolders.map(folder => [folder, 0])
+      );
+      state.files.forEach(file => {
+        counts[pathOf(file).split('/')[1]] += 1;
+      });
+      const total = state.files.reduce((sum, file) => sum + file.size, 0);
+
+      $('folderHelp').textContent =
+        `${state.files.length} supported ${state.files.length === 1 ? 'file' : 'files'} ready`;
+      $('fileCount').textContent = `${state.files.length} supported files`;
+      $('fileSize').textContent = `${(total / 1024 / 1024).toFixed(1)} MB`;
+      $('ignoredCount').textContent = `${state.ignoredFiles.length} ignored`;
+      $('fileMeta').classList.remove('hidden');
+
+      $('folderChecks').innerHTML = requiredFolders.map(folder => {
+        const count = counts[folder];
+        return `<div class="folder-check ${count ? 'ready' : ''}"><b>${folder}</b>${count ? `&#10003; ${count} files` : 'Missing'}</div>`;
+      }).join('');
+      $('folderChecks').classList.remove('hidden');
+
+      if (state.ignoredFiles.length) {
+        const names = state.ignoredFiles
+          .slice(0, 3)
+          .map(file => file.name)
+          .join(', ');
+        const noun = state.ignoredFiles.length === 1
+          ? 'file was'
+          : 'files were';
+        $('ignoredNotice').textContent =
+          `${state.ignoredFiles.length} unsupported ${noun} ignored${names ? `: ${names}` : ''}.`;
+        $('ignoredNotice').classList.remove('hidden');
+      } else {
+        $('ignoredNotice').classList.add('hidden');
+      }
+
+      const missing = requiredFolders.filter(folder => counts[folder] === 0);
+      const errors = [];
+      if (!candidates.length) {
+        errors.push('No supported DOCX, PDF or XLSX files were found.');
+      }
+      if (invalid.length) {
+        errors.push(
+          `Folder names must match exactly: ${requiredFolders.join(', ')}.`
+        );
+      }
+      if (missing.length) {
+        errors.push(`Missing required folders: ${missing.join(', ')}.`);
+      }
+      if (state.files.length > 20) {
+        errors.push('The folder exceeds the 20 supported-file UAT limit.');
+      }
+      if (total > 100000000) {
+        errors.push('The supported files exceed the 100 MB UAT limit.');
+      }
+
+      state.selectionValid = errors.length === 0;
+      if (errors.length) {
+        $('uploadError').textContent = errors.join(' ');
+        $('uploadError').classList.remove('hidden');
+      } else {
+        $('uploadError').classList.add('hidden');
+      }
+      $('continueButton').disabled = !state.selectionValid;
+    }
+    async function uploadAndValidate(){if(!state.selectionValid||state.busy)return;setBusy(true);$('uploadProgress').classList.remove('hidden');try{const manifest=state.files.map(file=>({relative_path:file.webkitRelativePath||file.name,size_bytes:file.size,content_type:file.type||null,modified_at:new Date(file.lastModified).toISOString()}));state.uploadSession=await api('/upload-sessions',{method:'POST',body:JSON.stringify({files:manifest})});const byPath=new Map(state.files.map(file=>[file.webkitRelativePath||file.name,file]));for(let index=0;index<state.uploadSession.files.length;index++){const descriptor=state.uploadSession.files[index];const file=byPath.get(descriptor.relative_path);const headers={...descriptor.required_headers,'X-CSRF-Token':state.csrf};const response=await fetch(descriptor.upload_url,{method:'PUT',headers,body:file,credentials:'include'});if(!response.ok){let message=`Upload failed for ${descriptor.relative_path}`;try{message=(await response.json()).error?.message||message}catch{}throw new Error(message)}const percent=Math.round(((index+1)/state.uploadSession.files.length)*100);$('progressBar').style.width=`${percent}%`;$('progressText').textContent=`Uploaded ${index+1} of ${state.uploadSession.files.length} files`;}state.validation=await api(`/upload-sessions/${state.uploadSession.session_id}/validate`,{method:'POST'});renderValidation();showValidationStep()}catch(error){$('uploadError').textContent=error.message;$('uploadError').classList.remove('hidden')}finally{setBusy(false)}}
+    function showValidationStep(){$('uploadStep').classList.add('hidden');$('validateStep').classList.remove('hidden');$('continueButton').classList.add('hidden');$('createButton').classList.remove('hidden');$('backButton').classList.remove('hidden');$('stepOne').className='step done';$('stepTwo').className='step active';$('modalTitle').textContent='Validate & create';$('modalSubtitle').textContent='Review the server validation result before creating the project.'}
+    function renderValidation(){const report=state.validation.validation_report||{errors:[],warnings:[],role_summary:{}};const valid=Boolean(report.valid);$('validationBanner').textContent=valid?`Folder is ready to create · ${state.validation.files.length} supported files`:'Blocking validation errors must be fixed';const roles=[['SCOPE','AWP'],['RISK_CONTEXT','APM'],['EVIDENCE','Process Understanding'],['CRITERIA','Process SOP']];$('folderTree').innerHTML=roles.map(([key,label])=>`<div class="folder-row"><b>${label}</b><span>${report.role_summary?.[key]||0} files</span></div>`).join('');$('validationRows').innerHTML=roles.map(([key,label])=>`<div class="check-row"><span>${label}</span><span class="check">${report.role_summary?.[key]>0?'✓ Ready':'— Missing'}</span></div>`).join('');$('validationMessages').innerHTML=[...(report.errors||[]).map(item=>`<div class="error-row">${escapeHtml(item.message)}</div>`),...(report.warnings||[]).map(item=>`<div class="warning-row">${escapeHtml(item.message)}</div>`)].join('');$('createButton').disabled=!valid}
+    async function createProject(){if(!state.validation?.validation_report?.valid||state.busy)return;const name=$('projectName').value.trim();if(!name){alert('Project name is required.');return}setBusy(true);try{await api(`/upload-sessions/${state.uploadSession.session_id}/projects`,{method:'POST',body:JSON.stringify({name})});$('projectModal').classList.add('hidden');resetModal();await loadProjects()}catch(error){alert(error.message)}finally{setBusy(false)}}
+    function backToUpload(){if(state.busy)return;$('uploadStep').classList.remove('hidden');$('validateStep').classList.add('hidden');$('continueButton').classList.remove('hidden');$('createButton').classList.add('hidden');$('backButton').classList.add('hidden');$('stepOne').className='step active';$('stepTwo').className='step';$('modalTitle').textContent='Upload artefacts'}
+    function setBusy(value){state.busy=value;$('projectModal').classList.toggle('loading',value);$('continueButton').disabled=value||!state.selectionValid;$('createButton').disabled=value||!state.validation?.validation_report?.valid}
+    $('loginButton').onclick=()=>location.assign('/api/v1/auth/google/login');$('newProjectButton').onclick=openModal;$('cancelButton').onclick=closeModal;$('backButton').onclick=backToUpload;$('continueButton').onclick=uploadAndValidate;$('createButton').onclick=createProject;$('folderPicker').onchange=onFolderSelected;$('refreshButton').onclick=loadProjects;$('projectModal').addEventListener('click',event=>{if(event.target===$('projectModal'))closeModal()});bootstrap();
+  </script>
+</body>
+</html>

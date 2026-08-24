@@ -58,6 +58,9 @@ class UploadFileValidation:
 class UploadSessionRecord:
     session_id: str
     state: UploadSessionState
+    actor_id: str
+    actor_label: str
+    actor_type: str
     created_at: datetime
     expires_at: datetime
     validation_report: dict[str, Any] | None
