@@ -38,7 +38,7 @@ API / CLI → Application → Domain
 Application workflow → AI + RAG + Documents
 ```
 
-`main.py`, the legacy run API and project upload workflow call the same
+`main.py` and the project-upload compatibility workflow call the same
 `AuditPipeline`; orchestration is not duplicated in HTTP routes.
 
 The AI and RAG code lives inside `backend/app` and shares the backend domain,
@@ -58,6 +58,20 @@ Folder upload
 `COMPLETED` is only written after the DOCX has been rendered and copied from
 raw `input/` staging to durable `output/` storage. There are no Observation or
 Draft Review API gates in the current POC.
+
+## UAT local upload-session workflow
+
+```text
+POST upload-sessions
+  → PUT each file to the returned upload_url
+  → POST validate
+  → POST projects
+  → immutable local source snapshot + v0.1
+```
+
+The application service depends on an intake-storage port. The current
+`LocalAuditIntakeStorage` adapter can later be replaced by an S3 adapter;
+clients continue to upload to the `upload_url` returned by the session.
 
 ## Setup
 
@@ -110,6 +124,12 @@ GET  /api/v1/projects/{project_id}/events
 GET  /api/v1/projects/{project_id}/events/stream
 GET  /api/v1/projects/{project_id}/output
 GET  /api/v1/health
+POST /api/v1/upload-sessions
+PUT  /api/v1/upload-sessions/{session_id}/files/{file_id}
+GET  /api/v1/upload-sessions/{session_id}
+POST /api/v1/upload-sessions/{session_id}/validate
+POST /api/v1/upload-sessions/{session_id}/projects
+DELETE /api/v1/upload-sessions/{session_id}
 ```
 
 The SSE endpoint emits pipeline progress suitable for the frontend thinking
@@ -142,8 +162,8 @@ are cleaned on application startup; output and database metadata remain.
 ```dotenv
 PROJECT_STORAGE_ROOT=/secure/project-storage
 RAW_UPLOAD_RETENTION_DAYS=7
-UPLOAD_MAX_FILES=500
-UPLOAD_MAX_BYTES=1073741824
+UPLOAD_MAX_FILES=20
+UPLOAD_MAX_BYTES=100000000
 ```
 
 For production, use encrypted S3/object storage, scheduled lifecycle cleanup,

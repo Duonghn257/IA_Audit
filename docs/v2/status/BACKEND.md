@@ -1,6 +1,6 @@
 # Trạng thái Backend
 
-> Xác minh gần nhất: 12/08/2026
+> Xác minh gần nhất: 21/08/2026
 > Trạng thái bàn giao: POC đã triển khai
 > Source of truth: `backend/app/`
 
@@ -30,7 +30,7 @@ DOCX trong `app/documents`, còn context/retrieval boundary trong `app/rag`.
 | Chức năng | Trạng thái | Bằng chứng trong source |
 |---|---|---|
 | Versioned FastAPI API | Đã xong | `backend/app/api/` |
-| Validate/lưu folder upload | Đã xong | `project_files.py`, `project_storage.py` |
+| Upload-session local + validation | Đã xong | `audit_intake_service.py`, `local_intake_storage.py` |
 | Persistent project metadata | Đã xong | `project_repository.py` |
 | Persistent progress events | Đã xong | `project_repository.py` |
 | Background project execution | Đủ cho POC | `ThreadPoolExecutor` trong `ProjectManager` |
@@ -40,10 +40,10 @@ DOCX trong `app/documents`, còn context/retrieval boundary trong `app/rag`.
 | DOCX output download | Đã xong | Project output endpoint |
 | PostgreSQL support | Đã xong | SQLAlchemy + psycopg |
 | SQLite local fallback | Đã xong | Local development/tests |
-| Alembic migration | Đã xong | Revision `20260729_01` |
+| Alembic migration | Đã xong | Head `20260812_02` |
 | Authentication/authorization | Chưa làm | Bắt buộc trước production |
 | Durable queue và recovery | Chưa làm | Worker hiện nằm trong API process |
-| SharePoint/S3/SQS adapters | Chưa làm | Future integration scope |
+| S3 adapter | Chưa làm | Local intake adapter đang dùng cùng application port |
 
 ## Project lifecycle
 
@@ -71,6 +71,17 @@ suy luận điều kiện export.
 `POST /projects/upload` trả HTTP 202, yêu cầu hai arrays `files` và
 `relative_paths` có cùng độ dài, normalize relative path và từ chối unsafe
 upload. Pipeline hiện tại còn yêu cầu `sample_issues.json` ở root folder.
+
+Upload-session UAT mới đã chạy bằng local adapter:
+
+| Method | Path | Mục đích |
+|---|---|---|
+| `POST` | `/api/v1/upload-sessions` | Tạo manifest/session và upload URLs |
+| `PUT` | `/api/v1/upload-sessions/{id}/files/{file_id}` | Upload raw file vào local staging |
+| `GET` | `/api/v1/upload-sessions/{id}` | Đọc file status/validation report |
+| `POST` | `/api/v1/upload-sessions/{id}/validate` | Hash, parse và logical-role validation |
+| `POST` | `/api/v1/upload-sessions/{id}/projects` | Promote immutable source, tạo project + `v0.1` |
+| `DELETE` | `/api/v1/upload-sessions/{id}` | Discard staging chưa promote |
 
 Legacy `/api/v1/runs/*` đã được gỡ khỏi router/OpenAPI vì frontend UAT không
 sử dụng. CLI nội bộ vẫn được giữ cho smoke test và vận hành cục bộ.
@@ -109,12 +120,12 @@ roadmap item.
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Backend automated tests | 14 passed |
+| Backend automated tests | 19 passed |
 | Import/compile check | Pass |
 | Live Lumina Grand CLI pipeline | Hoàn thành 8/8 stages |
 | Generated DOCX | Hợp lệ và mở được |
 | API container health | Healthy |
-| Alembic current | `20260729_01 (head)` |
+| Alembic current | `20260812_02 (head)` |
 | Alembic schema drift check | Pass |
 
 Default tests không gọi live LLM:
@@ -130,10 +141,9 @@ pytest
 - Pipeline chưa có durable checkpoint/resume theo stage.
 - Local thread execution không phù hợp nhiều API replicas.
 - Chưa có project ownership, authentication hoặc authorization.
-- Upload có file-count/total-size limit nhưng chưa có MIME allowlist, antivirus
-  scan hoặc content deduplication.
+- Upload-session mới enforce DOCX/PDF/XLSX, tối đa 20 files và 100 MB;
+  antivirus scan và content deduplication chưa có.
 - Cleanup chạy khi startup, chưa có scheduler.
-- Legacy run state còn nằm trong memory.
 - `Base.metadata.create_all()` còn được giữ cho local compatibility; production
   nên quản lý schema chỉ bằng migrations.
 

@@ -30,6 +30,22 @@ class UploadFileInput:
 
 
 @dataclass(frozen=True)
+class UploadFileRecord:
+    file_id: str
+    session_id: str
+    relative_path: str
+    size_bytes: int
+    content_type: str | None
+    staging_object_key: str
+    upload_status: str
+    content_hash: str | None
+    logical_role: LogicalRole | None
+    readability_status: str | None
+    validation_message: str | None
+    modified_at: datetime | None = None
+
+
+@dataclass(frozen=True)
 class UploadFileValidation:
     file_id: str
     content_hash: str

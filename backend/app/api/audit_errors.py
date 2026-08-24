@@ -1,8 +1,8 @@
 """Translation from audit domain errors to the stable HTTP error contract."""
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 from fastapi import status
 
@@ -14,6 +14,9 @@ from app.domain.audit import (
     AuditProjectNotFoundError,
     AuditStateError,
     AuditVersionNotFoundError,
+    DuplicateProjectNameError,
+    UploadFileNotFoundError,
+    UploadSessionNotFoundError,
     VersionConflictError,
 )
 
@@ -22,6 +25,14 @@ from app.domain.audit import (
 def audit_api_errors() -> Iterator[None]:
     try:
         yield
+    except UploadSessionNotFoundError as exc:
+        raise _not_found(
+            "UPLOAD_SESSION_NOT_FOUND", "Upload session", exc
+        ) from exc
+    except UploadFileNotFoundError as exc:
+        raise _not_found(
+            "UPLOAD_FILE_NOT_FOUND", "Upload file", exc
+        ) from exc
     except AuditProjectNotFoundError as exc:
         raise _not_found("PROJECT_NOT_FOUND", "Project", exc) from exc
     except AuditVersionNotFoundError as exc:
@@ -35,6 +46,12 @@ def audit_api_errors() -> Iterator[None]:
             status_code=status.HTTP_409_CONFLICT,
             code="ROW_VERSION_CONFLICT",
             message="Issue was changed by another request. Reload it and retry.",
+        ) from exc
+    except DuplicateProjectNameError as exc:
+        raise ApiError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="DUPLICATE_PROJECT_NAME",
+            message=f"Project name already exists: {_error_value(exc)}",
         ) from exc
     except ActiveJobConflictError as exc:
         raise ApiError(

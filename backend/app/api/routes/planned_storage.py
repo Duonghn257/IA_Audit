@@ -1,72 +1,134 @@
-"""Published API contract for endpoints blocked by the unavailable S3 bucket."""
+"""Local-first upload sessions and object-download placeholder routes."""
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from typing import Annotated
 
-from app.api.audit_errors import feature_unavailable
+from fastapi import APIRouter, Depends, Request, status
+
+from app.api.audit_errors import audit_api_errors, feature_unavailable
+from app.api.dependencies import get_audit_intake_service
 from app.api.schemas.upload_sessions import (
     CreateProjectFromUploadRequest,
+    CreateProjectFromUploadResponse,
     CreateUploadSessionRequest,
-    PlannedFeatureResponse,
+    UploadFileResponse,
+    UploadSessionResponse,
+)
+from app.application.audit_intake_service import (
+    AuditIntakeService,
+    UploadFileDescriptor,
 )
 
 router = APIRouter(tags=["upload-sessions"])
-
-
-def _s3_unavailable():
-    raise feature_unavailable(
-        "S3_STORAGE_NOT_CONFIGURED",
-        "This endpoint is in the API contract but cannot run until "
-        "an S3 bucket and credentials are configured.",
-    )
+AuditIntakeDependency = Annotated[
+    AuditIntakeService,
+    Depends(get_audit_intake_service),
+]
 
 
 @router.post(
     "/upload-sessions",
-    response_model=PlannedFeatureResponse,
+    response_model=UploadSessionResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={501: {"description": "S3 storage is not configured"}},
 )
-def create_upload_session(request: CreateUploadSessionRequest) -> PlannedFeatureResponse:
-    del request
-    return _s3_unavailable()
+def create_upload_session(
+    request: CreateUploadSessionRequest,
+    service: AuditIntakeDependency,
+) -> UploadSessionResponse:
+    with audit_api_errors():
+        view = service.create_session(
+            [
+                UploadFileDescriptor(
+                    relative_path=file.relative_path,
+                    size_bytes=file.size_bytes,
+                    content_type=file.content_type,
+                    modified_at=file.modified_at,
+                )
+                for file in request.files
+            ]
+        )
+        return UploadSessionResponse.from_view(view)
 
 
-@router.get("/upload-sessions/{session_id}", response_model=PlannedFeatureResponse)
-def get_upload_session(session_id: str) -> PlannedFeatureResponse:
-    del session_id
-    return _s3_unavailable()
+@router.put(
+    "/upload-sessions/{session_id}/files/{file_id}",
+    response_model=UploadFileResponse,
+)
+async def upload_session_file(
+    session_id: str,
+    file_id: str,
+    request: Request,
+    service: AuditIntakeDependency,
+) -> UploadFileResponse:
+    with audit_api_errors():
+        view = await service.upload_file(
+            session_id,
+            file_id,
+            request.stream(),
+        )
+        return UploadFileResponse.from_view(view)
+
+
+@router.get(
+    "/upload-sessions/{session_id}",
+    response_model=UploadSessionResponse,
+)
+def get_upload_session(
+    session_id: str,
+    service: AuditIntakeDependency,
+) -> UploadSessionResponse:
+    with audit_api_errors():
+        return UploadSessionResponse.from_view(
+            service.get_session(session_id)
+        )
 
 
 @router.post(
     "/upload-sessions/{session_id}/validate",
-    response_model=PlannedFeatureResponse,
+    response_model=UploadSessionResponse,
 )
-def validate_upload_session(session_id: str) -> PlannedFeatureResponse:
-    del session_id
-    return _s3_unavailable()
+def validate_upload_session(
+    session_id: str,
+    service: AuditIntakeDependency,
+) -> UploadSessionResponse:
+    with audit_api_errors():
+        return UploadSessionResponse.from_view(
+            service.validate_session(session_id)
+        )
 
 
 @router.post(
     "/upload-sessions/{session_id}/projects",
-    response_model=PlannedFeatureResponse,
+    response_model=CreateProjectFromUploadResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_project_from_upload(
     session_id: str,
     request: CreateProjectFromUploadRequest,
-) -> PlannedFeatureResponse:
-    del session_id, request
-    return _s3_unavailable()
+    service: AuditIntakeDependency,
+) -> CreateProjectFromUploadResponse:
+    with audit_api_errors():
+        return CreateProjectFromUploadResponse.from_result(
+            service.promote_session(session_id, request.name)
+        )
 
 
-@router.delete("/upload-sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_upload_session(session_id: str) -> None:
-    del session_id
-    _s3_unavailable()
+@router.delete(
+    "/upload-sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_upload_session(
+    session_id: str,
+    service: AuditIntakeDependency,
+) -> None:
+    with audit_api_errors():
+        service.discard_session(session_id)
 
 
 @router.get("/outputs/{output_id}/download", response_model=None)
 def download_output(output_id: str):
     del output_id
-    return _s3_unavailable()
+    raise feature_unavailable(
+        "S3_STORAGE_NOT_CONFIGURED",
+        "Versioned output download is not implemented yet.",
+    )

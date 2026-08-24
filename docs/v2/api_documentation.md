@@ -151,11 +151,12 @@ Với cùng scope và `Idempotency-Key`:
 | Status | Method | Path | Mục đích | Success |
 |---|---|---|---|---|
 | READY | `GET` | `/health` | Kiểm tra API process | `200 HealthResponse` |
-| STUB | `POST` | `/upload-sessions` | Tạo staging session và upload instructions | `201 UploadSession` |
-| STUB | `GET` | `/upload-sessions/{session_id}` | Đọc trạng thái, tree và validation report | `200 UploadSession` |
-| STUB | `POST` | `/upload-sessions/{session_id}/validate` | Validate/revalidate file đã upload | `202 UploadSession` |
-| STUB | `POST` | `/upload-sessions/{session_id}/projects` | Promote snapshot, tạo project và `v0.1` | `201 ProjectDetail` |
-| STUB | `DELETE` | `/upload-sessions/{session_id}` | Hủy staging chưa promote | `204` |
+| READY | `POST` | `/upload-sessions` | Tạo staging session và upload instructions | `201 UploadSession` |
+| READY | `PUT` | `/upload-sessions/{session_id}/files/{file_id}` | Upload raw file content vào local staging | `200 UploadFile` |
+| READY | `GET` | `/upload-sessions/{session_id}` | Đọc trạng thái, tree và validation report | `200 UploadSession` |
+| READY | `POST` | `/upload-sessions/{session_id}/validate` | Validate/revalidate file đã upload | `200 UploadSession` |
+| READY | `POST` | `/upload-sessions/{session_id}/projects` | Promote snapshot, tạo project và `v0.1` | `201 CreateProjectFromUploadResponse` |
+| READY | `DELETE` | `/upload-sessions/{session_id}` | Hủy staging chưa promote | `204` |
 
 ### 3.2 Project, version và issue workspace
 
@@ -203,7 +204,11 @@ Với cùng scope và `Idempotency-Key`:
       "content_type": "application/pdf",
       "upload_status": "UPLOADED",
       "logical_role": "SCOPE",
-      "readability_status": "READABLE"
+      "readability_status": "READABLE",
+      "validation_message": null,
+      "upload_method": "PUT",
+      "upload_url": "/api/v1/upload-sessions/upl_01J5.../files/fil_01J5...",
+      "required_headers": {"Content-Type": "application/pdf"}
     }
   ],
   "validation_report": {
@@ -434,24 +439,25 @@ riêng thay vì thay đổi semantics của route này.
 
 ## 6. Upload và project intake APIs
 
+Các API dưới đây hiện chạy bằng local filesystem adapter. Client nhận
+`upload_url` từ response và không phụ thuộc storage backend; khi chuyển sang
+S3, URL này sẽ trở thành presigned URL mà không đổi create/get/validate/promote
+flow.
+
 ### 6.1 POST `/upload-sessions`
 
-**Mục đích:** khai báo folder manifest và nhận upload instruction cho từng file.
-Request này chưa tạo project và chưa chạy discovery.
-
-**Headers:** `Idempotency-Key` required.
+**Mục đích:** khai báo folder manifest và tạo staging session. Request này chưa
+tạo project và chưa chạy discovery.
 
 **Input:**
 
 ```json
 {
-  "root_folder_name": "FY2026 Access Review",
   "files": [
     {
-      "client_file_id": "browser-1",
-      "relative_path": "AWP/Approved Work Programme.pdf",
+      "relative_path": "AWP/Approved Work Programme.docx",
       "size_bytes": 152340,
-      "content_type": "application/pdf",
+      "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "modified_at": "2026-08-20T03:00:00Z"
     }
   ]
@@ -460,61 +466,81 @@ Request này chưa tạo project và chưa chạy discovery.
 
 | Field | Required | Rule |
 |---|---:|---|
-| `root_folder_name` | Có | `1..255` chars |
 | `files` | Có | `1..20` files |
-| `client_file_id` | Có | Unique trong request; dùng để map response |
-| `relative_path` | Có | POSIX relative path; không absolute, `..`, duplicate hoặc control chars |
+| `relative_path` | Có | POSIX relative path; không absolute, `..` hoặc duplicate |
 | `size_bytes` | Có | `> 0`; tổng folder tối đa `100,000,000` bytes |
-| `content_type` | Có | MIME của `.docx`, `.pdf` hoặc `.xlsx` |
-| `modified_at` | Không | Metadata từ browser; không dùng làm integrity check |
+| `content_type` | Không | MIME metadata của DOCX/PDF/XLSX |
+| `modified_at` | Không | Metadata từ browser |
 
-**Output — `201 UploadSession`:** session state `UPLOADING`; mỗi file có
-`file_id`, presigned `upload_url`, HTTP method, required headers và expiry.
-Upload URL là private short-lived URL, không phải API application route.
+**Output — `201 UploadSession`:** state `UPLOADING`; mỗi file có
+`file_id`, `upload_method = "PUT"`, `upload_url`, required headers và
+upload status.
 
-**Lỗi chính:** `409 IDEMPOTENCY_CONFLICT`, `413 FOLDER_TOO_LARGE`,
-`415 UNSUPPORTED_FILE_TYPE`, `422 INVALID_UPLOAD_MANIFEST`.
+Local adapter trả URL dạng:
 
-### 6.2 GET `/upload-sessions/{session_id}`
+```text
+/api/v1/upload-sessions/{session_id}/files/{file_id}
+```
+
+**Lỗi chính:** `422 INVALID_REQUEST` cho folder rỗng, unsafe/duplicate path,
+file rỗng, quá 20 files, quá 100 MB hoặc format ngoài DOCX/PDF/XLSX.
+
+### 6.2 PUT `/upload-sessions/{session_id}/files/{file_id}`
+
+**Mục đích:** upload raw content của một file vào local staging.
+
+**Input:** raw request body; `Content-Type` nên trùng metadata đã khai báo.
+Số byte thực tế phải bằng chính xác `size_bytes`.
+
+**Output — `200 UploadFile`:** `upload_status = "UPLOADED"`.
+
+**Lỗi chính:** `404 UPLOAD_SESSION_NOT_FOUND`,
+`404 UPLOAD_FILE_NOT_FOUND`, `409 INVALID_STATE`,
+`422 INVALID_REQUEST` khi size mismatch.
+
+Route này là upload target của local adapter. Khi dùng S3, frontend PUT trực
+tiếp vào presigned URL và route application này không nằm trên data path.
+
+### 6.3 GET `/upload-sessions/{session_id}`
 
 **Mục đích:** phục hồi wizard sau reload và đọc upload/validation status.
 
 **Input:** path `session_id`.
 
-**Output — `200 UploadSession`:** file tree, per-file status,
-`validation_report`, `allowed_actions` và `action_reasons`.
+**Output — `200 UploadSession`:** per-file status, validation report,
+`allowed_actions` và `action_reasons`.
 
-**Lỗi chính:** `404 UPLOAD_SESSION_NOT_FOUND`, `410 UPLOAD_SESSION_EXPIRED`.
+**Lỗi chính:** `404 UPLOAD_SESSION_NOT_FOUND`, `409 INVALID_STATE` nếu
+session đã hết hạn.
 
-### 6.3 POST `/upload-sessions/{session_id}/validate`
+### 6.4 POST `/upload-sessions/{session_id}/validate`
 
-**Mục đích:** kiểm tra authoritative server-side sau khi client upload đủ file.
-
-**Headers:** `Idempotency-Key` required.
+**Mục đích:** validation đồng bộ trên local storage sau khi upload file.
 
 **Input:** path `session_id`; không có body.
 
-**Output — `202 UploadSession`:** state `VALIDATING`. Client dùng GET session
-để lấy terminal result `READY_TO_CREATE` hoặc `INVALID`.
+**Output — `200 UploadSession`:** terminal state `READY_TO_CREATE` hoặc
+`INVALID`, kèm structured validation report.
 
-Validation gồm:
+Validation hiện kiểm tra:
 
-- path, số lượng, tổng dung lượng và allowlist;
-- file missing/size mismatch/hash;
-- corrupt, encrypted/password-protected hoặc zero-byte;
-- mapping logical role và required roles;
-- readability bằng parser;
-- warning khi user upload `Guidelines`/`Samples` vì UAT dùng central assets.
+- object tồn tại và size khớp manifest;
+- SHA-256 content hash;
+- DOCX/PDF/XLSX parse được;
+- logical-role mapping theo `AWP`, `APM`, `Process Understanding` và
+  `Process SOP`;
+- có ít nhất một readable file cho mỗi role `SCOPE`, `RISK_CONTEXT`,
+  `EVIDENCE` và `CRITERIA`;
+- file ngoài required folders được giữ là `CONTEXT` và sinh warning.
 
-**Lỗi chính:** `404 UPLOAD_SESSION_NOT_FOUND`,
-`409 UPLOAD_INCOMPLETE`, `410 UPLOAD_SESSION_EXPIRED`.
+Session `INVALID` cho phép upload lại file rồi validate lại.
 
-### 6.4 POST `/upload-sessions/{session_id}/projects`
+**Lỗi chính:** `404 UPLOAD_SESSION_NOT_FOUND`, `409 INVALID_STATE`.
 
-**Mục đích:** promote một valid staging snapshot thành immutable project và tạo
-version đầu tiên `v0.1` trong cùng transaction.
+### 6.5 POST `/upload-sessions/{session_id}/projects`
 
-**Headers:** `Idempotency-Key` required.
+**Mục đích:** copy valid staging content sang immutable local source snapshot,
+tạo project và `v0.1` trong cùng application flow.
 
 **Input:**
 
@@ -524,26 +550,42 @@ version đầu tiên `v0.1` trong cùng transaction.
 }
 ```
 
-**Output — `201 ProjectDetail`:** project state `READY_FOR_DISCOVERY`,
-source snapshot và `latest_version.label = "v0.1"`.
+**Output — `201 CreateProjectFromUploadResponse`:**
+
+```json
+{
+  "project_id": "project-id",
+  "name": "FY2026 Access Review",
+  "state": "READY_FOR_DISCOVERY",
+  "source_snapshot_id": "snapshot-id",
+  "version": {
+    "version_id": "version-id",
+    "sequence_no": 1,
+    "label": "v0.1",
+    "state": "DRAFT",
+    "issue_revision": 0
+  },
+  "created_at": "2026-08-21T08:10:00Z",
+  "updated_at": "2026-08-21T08:10:00Z"
+}
+```
 
 **Lỗi chính:** `404 UPLOAD_SESSION_NOT_FOUND`,
-`409 DUPLICATE_PROJECT_NAME`, `409 SESSION_ALREADY_PROMOTED`,
-`422 SESSION_NOT_READY`.
+`409 DUPLICATE_PROJECT_NAME`, `409 INVALID_STATE`.
 
-Hai project có thể có cùng file content nếu tên khác nhau. Backend không
-deduplicate project theo content hash.
+Nếu database promotion lỗi, backend dọn local source copy và giữ staging để
+người dùng có thể retry.
 
-### 6.5 DELETE `/upload-sessions/{session_id}`
+### 6.6 DELETE `/upload-sessions/{session_id}`
 
-**Mục đích:** hủy staging chưa promote và schedule xoá object tạm.
+**Mục đích:** xóa metadata và local staging của session chưa promote.
 
 **Input:** path `session_id`.
 
-**Output — `204`:** không có body. Lặp lại DELETE có thể trả `204`.
+**Output — `204`:** không có body.
 
-**Lỗi chính:** `409 SESSION_ALREADY_PROMOTED`. Project/source snapshot đã
-promote không thể bị xóa bằng route này.
+**Lỗi chính:** `404 UPLOAD_SESSION_NOT_FOUND`,
+`409 INVALID_STATE` nếu session đã promote.
 
 ## 7. Project và version APIs
 
@@ -933,7 +975,7 @@ Current `ProjectBridge` response:
 
 Bridge retirement conditions:
 
-1. upload-session storage và validation chạy end-to-end;
+1. frontend tích hợp upload-session local flow và bỏ bridge upload;
 2. promote tạo project + `v0.1`;
 3. frontend chuyển sang explicit discovery/Audit jobs;
 4. frontend tải output theo project/version/output ID;
@@ -987,7 +1029,7 @@ không phải public HTTP contract và vẫn được giữ.
 
 | Gap | Runtime hiện tại | Contract đích |
 |---|---|---|
-| Upload session | Route trả `501 S3_STORAGE_NOT_CONFIGURED` | Full UploadSession + validation |
+| Upload storage | Local adapter chạy end-to-end | Thêm S3 adapter, giữ nguyên service contract |
 | Project list/detail | Trả `ProjectBridge` | ProjectPage/ProjectDetail |
 | Issue list | Trả array | IssuePage có cursor |
 | Issue update | `PUT`, full editable payload | `PATCH`, partial business fields |
@@ -996,7 +1038,7 @@ không phải public HTTP contract và vẫn được giữ.
 | Retry | Backend method hiện trả job trực tiếp | `202`, idempotency và retry reason |
 | Output download | Global `/outputs/{output_id}/download`, trả `501` | Nested project/version path |
 | Idempotency | Chưa enforce đồng đều | Required cho command endpoint |
-| UAT limits | Runtime settings cũ có thể lớn hơn | 20 files, 100,000,000 bytes |
+| UAT limits | Đã enforce 20 files và 100,000,000 bytes | Giữ cấu hình tương đương trên S3 |
 
 Không coi route `501` là feature đã hoàn thành. Swagger chỉ chứng minh contract
 đã publish, không chứng minh luồng UAT end-to-end đã sẵn sàng.

@@ -18,8 +18,8 @@ class ApiSettings:
     database_url: str = "sqlite+pysqlite:///:memory:"
     storage_root: Path = Path(".runtime/projects")
     raw_retention_days: int = 7
-    upload_max_files: int = 500
-    upload_max_bytes: int = 1024 * 1024 * 1024
+    upload_max_files: int = 20
+    upload_max_bytes: int = 100_000_000
 
 
 def load_api_settings() -> ApiSettings:
@@ -58,14 +58,14 @@ def load_api_settings() -> ApiSettings:
     )
     upload_max_files = max(
         1,
-        int(os.environ.get("UPLOAD_MAX_FILES", "500")),
+        int(os.environ.get("UPLOAD_MAX_FILES", "20")),
     )
     upload_max_bytes = max(
         1,
         int(
             os.environ.get(
                 "UPLOAD_MAX_BYTES",
-                str(1024 * 1024 * 1024),
+                str(100_000_000),
             )
         ),
     )

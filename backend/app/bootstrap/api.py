@@ -1,8 +1,8 @@
 """FastAPI application factory and dependency composition."""
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,13 +10,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.errors import ApiError, api_error_handler
 from app.api.middleware import CorrelationIdMiddleware
 from app.api.router import api_v1_router
+from app.application.audit_intake_service import AuditIntakeService
 from app.application.audit_workspace_service import AuditWorkspaceService
 from app.application.path_resolver import LocalPathResolver
 from app.application.project_manager import ProjectManager
 from app.application.run_manager import RunManager
 from app.core.settings import ApiSettings, load_api_settings
+from app.infrastructure.audit_intake_repository import (
+    SqlAlchemyAuditIntakeRepository,
+)
 from app.infrastructure.audit_repository import SqlAlchemyAuditRepository
 from app.infrastructure.database import Database
+from app.infrastructure.local_intake_storage import (
+    LocalAuditIntakeStorage,
+)
 from app.infrastructure.project_repository import (
     SqlAlchemyProjectRepository,
 )
@@ -30,6 +37,7 @@ def create_app(
     run_manager: RunManager | None = None,
     project_manager: ProjectManager | None = None,
     audit_workspace_service: AuditWorkspaceService | None = None,
+    audit_intake_service: AuditIntakeService | None = None,
 ) -> FastAPI:
     runtime_settings = settings or load_api_settings()
     runtime_manager = run_manager or RunManager(
@@ -67,6 +75,21 @@ def create_app(
     else:
         runtime_audit_workspace_service = audit_workspace_service
 
+    if audit_intake_service is None:
+        if database is None:
+            database = Database(runtime_settings.database_url)
+            database.create_schema()
+        runtime_audit_intake_service = AuditIntakeService(
+            SqlAlchemyAuditIntakeRepository(database.sessions),
+            LocalAuditIntakeStorage(
+                runtime_settings.storage_root / "uat-intake"
+            ),
+            max_files=runtime_settings.upload_max_files,
+            max_total_bytes=runtime_settings.upload_max_bytes,
+        )
+    else:
+        runtime_audit_intake_service = audit_intake_service
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         project_service = app.state.project_manager
@@ -89,7 +112,12 @@ def create_app(
     application.state.settings = runtime_settings
     application.state.run_manager = runtime_manager
     application.state.project_manager = runtime_project_manager
-    application.state.audit_workspace_service = runtime_audit_workspace_service
+    application.state.audit_workspace_service = (
+        runtime_audit_workspace_service
+    )
+    application.state.audit_intake_service = (
+        runtime_audit_intake_service
+    )
     application.state.database = database
     application.state.path_resolver = LocalPathResolver(runtime_settings)
     application.add_exception_handler(ApiError, api_error_handler)

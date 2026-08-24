@@ -1,8 +1,8 @@
 """Shared queries, validation and record mapping for audit repositories."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime, timezone
-from typing import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -24,13 +24,15 @@ from app.domain.audit import (
     JobRecord,
     JobState,
     JobType,
+    LogicalRole,
     OutputRevisionRecord,
     OutputStatus,
     ProjectState,
     ProjectVersionRecord,
-    SourceRefKind,
     SourceReferenceInput,
     SourceReferenceRecord,
+    SourceRefKind,
+    UploadFileRecord,
     UploadSessionNotFoundError,
     UploadSessionRecord,
     UploadSessionState,
@@ -191,6 +193,27 @@ def as_utc(value: datetime | None) -> datetime | None:
 
 def to_upload_session_record(model: UploadSessionModel) -> UploadSessionRecord:
     return UploadSessionRecord(model.session_id, UploadSessionState(model.state), as_utc(model.created_at), as_utc(model.expires_at), model.validation_report, as_utc(model.promoted_at))
+
+
+def to_upload_file_record(model) -> UploadFileRecord:
+    return UploadFileRecord(
+        file_id=model.file_id,
+        session_id=model.session_id,
+        relative_path=model.relative_path,
+        size_bytes=model.size_bytes,
+        content_type=model.content_type,
+        staging_object_key=model.staging_object_key,
+        upload_status=model.upload_status,
+        content_hash=model.content_hash,
+        logical_role=(
+            LogicalRole(model.logical_role)
+            if model.logical_role
+            else None
+        ),
+        readability_status=model.readability_status,
+        validation_message=model.validation_message,
+        modified_at=as_utc(model.modified_at),
+    )
 
 
 def to_project_record(project: ProjectModel, snapshot: SourceSnapshotModel, next_number: int) -> AuditProjectRecord:

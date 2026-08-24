@@ -8,6 +8,10 @@ class UploadSessionNotFoundError(KeyError):
     """Raised when an upload session does not exist."""
 
 
+class UploadFileNotFoundError(KeyError):
+    """Raised when a staged upload file does not exist."""
+
+
 class AuditProjectNotFoundError(KeyError):
     """Raised when a UAT audit project does not exist."""
 
