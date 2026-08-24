@@ -6,7 +6,8 @@ import type {
 } from "../types/projects"
 import { serialiseAuditorIssues } from "../auditor-inputs"
 
-const API_ROOT = (import.meta.env.VITE_API_BASE_URL || "/api/v1").replace(/\/$/, "")
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "")
+const API_ROOT = `${API_BASE_URL}/api/v1`
 
 export class ApiClientError extends Error {
   readonly code: string
@@ -50,7 +51,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function apiUrl(path: string): string {
   if (/^https?:\/\//.test(path)) return path
-  if (path.startsWith("/api/")) return path
+  if (path.startsWith("/api/")) return `${API_BASE_URL}${path}`
   return `${API_ROOT}${path.startsWith("/") ? path : `/${path}`}`
 }
 
