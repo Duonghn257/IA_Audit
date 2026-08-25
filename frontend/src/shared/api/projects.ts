@@ -1,7 +1,13 @@
 import type {
+  AuditJob,
   ApiErrorBody,
   AuditProject,
+  CandidateIssue,
+  CreatedAuditProject,
+  OutputRevision,
   ProjectEvent,
+  ProjectVersion,
+  UploadSession,
   UploadProjectInput,
 } from "../types/projects"
 import { serialiseAuditorIssues } from "../auditor-inputs"
@@ -135,6 +141,159 @@ export function uploadProject(
     })
     xhr.send(form)
   })
+}
+
+export function createUploadSession(files: File[]): Promise<UploadSession> {
+  return request<UploadSession>("/upload-sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      files: files.map((file) => ({
+        relative_path: file.webkitRelativePath || file.name,
+        size_bytes: file.size,
+        content_type: file.type || null,
+        modified_at: file.lastModified ? new Date(file.lastModified).toISOString() : null,
+      })),
+    }),
+  })
+}
+
+export async function uploadSessionFiles(
+  session: UploadSession,
+  files: File[],
+  onProgress: (percent: number, uploadedFiles: number) => void,
+): Promise<UploadSession> {
+  const filesByPath = new Map(
+    files.map((file) => [file.webkitRelativePath || file.name, file]),
+  )
+  let uploadedFiles = 0
+
+  for (const descriptor of session.files) {
+    const file = filesByPath.get(descriptor.relative_path)
+    if (!file) continue
+    await request<unknown>(descriptor.upload_url, {
+      method: descriptor.upload_method || "PUT",
+      headers: {
+        "Content-Type": descriptor.content_type || "application/octet-stream",
+        ...descriptor.required_headers,
+      },
+      body: file,
+    })
+    uploadedFiles += 1
+    onProgress(Math.round((uploadedFiles / Math.max(files.length, 1)) * 100), uploadedFiles)
+  }
+
+  return getUploadSession(session.session_id)
+}
+
+export function getUploadSession(sessionId: string): Promise<UploadSession> {
+  return request<UploadSession>(`/upload-sessions/${encodeURIComponent(sessionId)}`)
+}
+
+export function validateUploadSession(sessionId: string): Promise<UploadSession> {
+  return request<UploadSession>(`/upload-sessions/${encodeURIComponent(sessionId)}/validate`, {
+    method: "POST",
+  })
+}
+
+export function promoteUploadSession(
+  sessionId: string,
+  name: string,
+): Promise<CreatedAuditProject> {
+  return request<CreatedAuditProject>(
+    `/upload-sessions/${encodeURIComponent(sessionId)}/projects`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    },
+  )
+}
+
+export async function discardUploadSession(sessionId: string): Promise<void> {
+  const response = await fetch(apiUrl(`/upload-sessions/${encodeURIComponent(sessionId)}`), {
+    method: "DELETE",
+    headers: { Accept: "application/json" },
+  })
+  if (!response.ok && response.status !== 404) {
+    throw new ApiClientError(`Request failed with status ${response.status}`, {
+      status: response.status,
+    })
+  }
+}
+
+export function listProjectVersions(projectId: string): Promise<ProjectVersion[]> {
+  return request<ProjectVersion[]>(`/projects/${encodeURIComponent(projectId)}/versions`)
+}
+
+export function createProjectVersion(
+  projectId: string,
+  baseVersionId: string,
+): Promise<ProjectVersion> {
+  return request<ProjectVersion>(`/projects/${encodeURIComponent(projectId)}/versions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_version_id: baseVersionId }),
+  })
+}
+
+export function listVersionIssues(projectId: string, versionId: string): Promise<CandidateIssue[]> {
+  return request<CandidateIssue[]>(
+    `/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/issues`,
+  )
+}
+
+export function setIssueDisposition(
+  projectId: string,
+  versionId: string,
+  issueId: string,
+  rowVersion: number,
+  status: CandidateIssue["status"],
+): Promise<CandidateIssue> {
+  return request<CandidateIssue>(
+    `/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/issues/${encodeURIComponent(issueId)}/disposition`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ row_version: rowVersion, status }),
+    },
+  )
+}
+
+export function startDiscoveryJob(projectId: string, versionId: string): Promise<AuditJob> {
+  return request<AuditJob>(
+    `/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/discovery-jobs`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ force: false }),
+    },
+  )
+}
+
+export function startAuditJob(
+  projectId: string,
+  versionId: string,
+  issueRevision: number,
+): Promise<AuditJob> {
+  return request<AuditJob>(
+    `/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/audit-jobs`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ issue_revision: issueRevision }),
+    },
+  )
+}
+
+export function retryAuditJob(jobId: string): Promise<AuditJob> {
+  return request<AuditJob>(`/jobs/${encodeURIComponent(jobId)}/retry`, { method: "POST" })
+}
+
+export function listVersionOutputs(projectId: string, versionId: string): Promise<OutputRevision[]> {
+  return request<OutputRevision[]>(
+    `/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/outputs`,
+  )
 }
 
 function isRootAuditorInput(file: File): boolean {
