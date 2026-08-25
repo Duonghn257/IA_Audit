@@ -241,7 +241,14 @@ class SqlAlchemyAuditIntakeRepository:
                     created_at=now,
                     updated_at=now,
                 )
-                session.add_all([project, snapshot, version])
+                # These models intentionally do not expose ORM relationships to
+                # ProjectModel. Flush each FK level explicitly so PostgreSQL does
+                # not insert a version/snapshot before its parent project during
+                # the lazy-load autoflush triggered by ``upload.files`` below.
+                session.add(project)
+                session.flush([project])
+                session.add_all([snapshot, version])
+                session.flush([snapshot, version])
                 for file in upload.files:
                     if (
                         not file.content_hash
