@@ -1,4 +1,5 @@
 """Folder upload, project status, progress and DOCX download endpoints."""
+
 from __future__ import annotations
 
 import asyncio
@@ -9,7 +10,10 @@ from typing import Annotated, AsyncIterator
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 
-from app.api.dependencies import get_project_manager
+from app.api.dependencies import (
+    CurrentPrincipalDependency,
+    get_project_manager,
+)
 from app.api.errors import ApiError
 from app.api.schemas.projects import (
     ProjectEventResponse,
@@ -37,6 +41,7 @@ ProjectManagerDependency = Annotated[
 )
 def upload_project(
     manager: ProjectManagerDependency,
+    principal: CurrentPrincipalDependency,
     files: Annotated[list[UploadFile], File()],
     relative_paths: Annotated[list[str], Form()],
     name: Annotated[str | None, Form()] = None,
@@ -61,6 +66,7 @@ def upload_project(
     ]
     try:
         project = manager.submit_upload(
+            owner_user_id=principal.user.user_id,
             name=project_name[:255],
             files=incoming,
         )
@@ -79,10 +85,11 @@ def upload_project(
 @router.get("", response_model=list[ProjectResponse])
 def list_projects(
     manager: ProjectManagerDependency,
+    principal: CurrentPrincipalDependency,
 ) -> list[ProjectResponse]:
     return [
         ProjectResponse.from_domain(project)
-        for project in manager.list()
+        for project in manager.list(owner_user_id=principal.user.user_id)
     ]
 
 
@@ -90,9 +97,10 @@ def list_projects(
 def get_project(
     project_id: str,
     manager: ProjectManagerDependency,
+    principal: CurrentPrincipalDependency,
 ) -> ProjectResponse:
     return ProjectResponse.from_domain(
-        _get_project_or_404(manager, project_id)
+        _get_project_or_404(manager, project_id, principal.user.user_id)
     )
 
 
@@ -103,13 +111,15 @@ def get_project(
 def list_project_events(
     project_id: str,
     manager: ProjectManagerDependency,
+    principal: CurrentPrincipalDependency,
     after_event_id: int = Query(default=0, ge=0),
 ) -> list[ProjectEventResponse]:
-    _get_project_or_404(manager, project_id)
+    _get_project_or_404(manager, project_id, principal.user.user_id)
     return [
         ProjectEventResponse.from_domain(event)
         for event in manager.list_events(
             project_id,
+            owner_user_id=principal.user.user_id,
             after_event_id=after_event_id,
         )
     ]
@@ -119,11 +129,17 @@ def list_project_events(
 def stream_project_events(
     project_id: str,
     manager: ProjectManagerDependency,
+    principal: CurrentPrincipalDependency,
     after_event_id: int = Query(default=0, ge=0),
 ) -> StreamingResponse:
-    _get_project_or_404(manager, project_id)
+    _get_project_or_404(manager, project_id, principal.user.user_id)
     return StreamingResponse(
-        _event_stream(manager, project_id, after_event_id),
+        _event_stream(
+            manager,
+            project_id,
+            principal.user.user_id,
+            after_event_id,
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache"},
     )
@@ -133,12 +149,10 @@ def stream_project_events(
 def download_project_output(
     project_id: str,
     manager: ProjectManagerDependency,
+    principal: CurrentPrincipalDependency,
 ) -> FileResponse:
-    project = _get_project_or_404(manager, project_id)
-    if (
-        project.status != ProjectStatus.COMPLETED
-        or not project.output_path
-    ):
+    project = _get_project_or_404(manager, project_id, principal.user.user_id)
+    if project.status != ProjectStatus.COMPLETED or not project.output_path:
         raise ApiError(
             status_code=status.HTTP_409_CONFLICT,
             code="OUTPUT_NOT_READY",
@@ -155,8 +169,7 @@ def download_project_output(
         path=output_path,
         filename=output_path.name,
         media_type=(
-            "application/vnd.openxmlformats-officedocument."
-            "wordprocessingml.document"
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         ),
     )
 
@@ -164,6 +177,7 @@ def download_project_output(
 async def _event_stream(
     manager: ProjectManager,
     project_id: str,
+    owner_user_id: str,
     after_event_id: int,
 ) -> AsyncIterator[str]:
     cursor = after_event_id
@@ -171,19 +185,18 @@ async def _event_stream(
     while True:
         events = manager.list_events(
             project_id,
+            owner_user_id=owner_user_id,
             after_event_id=cursor,
         )
         for event in events:
             cursor = event.event_id
-            payload = ProjectEventResponse.from_domain(event).model_dump(
-                mode="json"
-            )
+            payload = ProjectEventResponse.from_domain(event).model_dump(mode="json")
             yield (
                 f"id: {event.event_id}\n"
                 "event: progress\n"
                 f"data: {json.dumps(payload)}\n\n"
             )
-        project = manager.get(project_id)
+        project = manager.get(project_id, owner_user_id=owner_user_id)
         if project.status.is_terminal and not events:
             yield "event: end\ndata: {}\n\n"
             return
@@ -196,9 +209,10 @@ async def _event_stream(
 def _get_project_or_404(
     manager: ProjectManager,
     project_id: str,
+    owner_user_id: str,
 ):
     try:
-        return manager.get(project_id)
+        return manager.get(project_id, owner_user_id=owner_user_id)
     except ProjectNotFoundError as exc:
         raise ApiError(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -210,8 +224,5 @@ def _get_project_or_404(
 def _infer_project_name(relative_paths: list[str]) -> str:
     if not relative_paths:
         return "Audit Project"
-    parts = PurePosixPath(
-        relative_paths[0].replace("\\", "/")
-    ).parts
+    parts = PurePosixPath(relative_paths[0].replace("\\", "/")).parts
     return parts[0].replace("_", " ").replace("-", " ") if parts else ""
-

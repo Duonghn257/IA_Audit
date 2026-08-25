@@ -1,4 +1,5 @@
 """Application ports implemented by infrastructure adapters."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -57,6 +58,7 @@ class ProjectRepository(Protocol):
         self,
         *,
         project_id: str,
+        owner_user_id: str,
         name: str,
         raw_expires_at: datetime,
     ) -> ProjectRecord: ...
@@ -92,14 +94,15 @@ class ProjectRepository(Protocol):
 
     def mark_failed(self, project_id: str, error: str) -> ProjectRecord: ...
 
-    def get(self, project_id: str) -> ProjectRecord: ...
+    def get(self, project_id: str, *, owner_user_id: str) -> ProjectRecord: ...
 
-    def list(self) -> list[ProjectRecord]: ...
+    def list(self, *, owner_user_id: str) -> list[ProjectRecord]: ...
 
     def list_events(
         self,
         project_id: str,
         *,
+        owner_user_id: str,
         after_event_id: int = 0,
     ) -> list[ProjectEvent]: ...
 

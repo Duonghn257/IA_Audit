@@ -8,15 +8,14 @@ from app.infrastructure.project_repository import (
 
 
 def test_project_repository_persists_state_and_progress(tmp_path) -> None:
-    database = Database(
-        f"sqlite+pysqlite:///{tmp_path / 'projects.db'}"
-    )
+    database = Database(f"sqlite+pysqlite:///{tmp_path / 'projects.db'}")
     database.create_schema()
     repository = SqlAlchemyProjectRepository(database.sessions)
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
 
     created = repository.create(
         project_id="project-1",
+        owner_user_id="user-1",
         name="FY2024 Audit",
         raw_expires_at=expires_at,
     )
@@ -42,9 +41,8 @@ def test_project_repository_persists_state_and_progress(tmp_path) -> None:
 
     assert completed.status == ProjectStatus.COMPLETED
     assert completed.current_activity == "DOCX ready to download"
-    assert repository.get(created.project_id).issue_count == 2
-    assert repository.list_events(created.project_id) == [event]
-    assert repository.list()[0].project_id == created.project_id
+    assert repository.get(created.project_id, owner_user_id="user-1").issue_count == 2
+    assert repository.list_events(created.project_id, owner_user_id="user-1") == [event]
+    assert repository.list(owner_user_id="user-1")[0].project_id == created.project_id
 
     database.dispose()
-

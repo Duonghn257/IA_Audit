@@ -1,4 +1,5 @@
 """Persistence operations for staging uploads and project promotion."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -84,13 +85,9 @@ class SqlAlchemyAuditIntakeRepository:
 
     def get_upload_session(self, session_id: str) -> UploadSessionRecord:
         with self._sessions() as session:
-            return to_upload_session_record(
-                get_upload_session(session, session_id)
-            )
+            return to_upload_session_record(get_upload_session(session, session_id))
 
-    def list_upload_files(
-        self, session_id: str
-    ) -> list[UploadFileRecord]:
+    def list_upload_files(self, session_id: str) -> list[UploadFileRecord]:
         with self._sessions() as session:
             get_upload_session(session, session_id)
             files = session.scalars(
@@ -103,9 +100,7 @@ class SqlAlchemyAuditIntakeRepository:
             ).all()
             return [to_upload_file_record(file) for file in files]
 
-    def get_upload_file(
-        self, session_id: str, file_id: str
-    ) -> UploadFileRecord:
+    def get_upload_file(self, session_id: str, file_id: str) -> UploadFileRecord:
         with self._sessions() as session:
             get_upload_session(session, session_id)
             file = session.scalars(
@@ -193,6 +188,7 @@ class SqlAlchemyAuditIntakeRepository:
         project_id: str,
         source_snapshot_id: str,
         version_id: str,
+        owner_user_id: str,
         name: str,
         manifest_hash: str,
         source_object_prefix: str,
@@ -201,21 +197,19 @@ class SqlAlchemyAuditIntakeRepository:
         now = utcnow()
         try:
             with self._sessions.begin() as session:
-                upload = get_upload_session(
-                    session, session_id, lock=True
-                )
-                require_upload_state(
-                    upload, {UploadSessionState.READY_TO_CREATE}
-                )
+                upload = get_upload_session(session, session_id, lock=True)
+                require_upload_state(upload, {UploadSessionState.READY_TO_CREATE})
                 duplicate = session.scalar(
                     select(ProjectModel.project_id).where(
-                        ProjectModel.name == name
+                        ProjectModel.owner_user_id == owner_user_id,
+                        ProjectModel.name == name,
                     )
                 )
                 if duplicate is not None:
                     raise DuplicateProjectNameError(name)
                 project = ProjectModel(
                     project_id=project_id,
+                    owner_user_id=owner_user_id,
                     name=name,
                     source_type="LOCAL_UPLOAD",
                     status=ProjectState.READY_FOR_DISCOVERY.value,
@@ -256,13 +250,10 @@ class SqlAlchemyAuditIntakeRepository:
                         or file.readability_status != "READABLE"
                     ):
                         raise AuditStateError(
-                            "All uploaded files must pass validation "
-                            "before promotion."
+                            "All uploaded files must pass validation before promotion."
                         )
                     object_key = (
-                        source_object_keys.get(
-                            file.file_id, file.staging_object_key
-                        )
+                        source_object_keys.get(file.file_id, file.staging_object_key)
                         if source_object_keys
                         else file.staging_object_key
                     )
@@ -283,10 +274,7 @@ class SqlAlchemyAuditIntakeRepository:
                 upload.promoted_at = now
                 session.flush()
         except IntegrityError as exc:
-            if (
-                "projects" in str(exc).lower()
-                and "name" in str(exc).lower()
-            ):
+            if "projects" in str(exc).lower() and "name" in str(exc).lower():
                 raise DuplicateProjectNameError(name) from exc
             raise
         return (
@@ -298,7 +286,5 @@ class SqlAlchemyAuditIntakeRepository:
         with self._sessions.begin() as session:
             upload = get_upload_session(session, session_id, lock=True)
             if upload.state == UploadSessionState.PROMOTED.value:
-                raise AuditStateError(
-                    "A promoted upload session cannot be discarded."
-                )
+                raise AuditStateError("A promoted upload session cannot be discarded.")
             session.delete(upload)

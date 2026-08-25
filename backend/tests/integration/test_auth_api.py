@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -6,8 +7,15 @@ from sqlalchemy import select
 
 from app.bootstrap.api import create_app
 from app.core.settings import ApiSettings
+from app.domain.audit import (
+    JobType,
+    LogicalRole,
+    UploadFileInput,
+    UploadFileValidation,
+)
 from app.domain.auth import AuthIdentity
 from app.infrastructure.audit_models import UploadSessionModel
+from app.infrastructure.audit_repository import SqlAlchemyAuditRepository
 from app.infrastructure.auth_repository import AuthSessionModel
 
 
@@ -62,9 +70,7 @@ def _settings(tmp_path: Path) -> ApiSettings:
         storage_root=tmp_path / "storage",
         google_client_id="client-id",
         google_client_secret="client-secret",
-        google_redirect_uri=(
-            "http://testserver/api/v1/auth/google/callback"
-        ),
+        google_redirect_uri=("http://testserver/api/v1/auth/google/callback"),
         auth_cookie_secure=False,
     )
 
@@ -93,8 +99,7 @@ def test_google_login_creates_server_session_and_protects_uploads(
         )
 
         callback = client.get(
-            "/api/v1/auth/google/callback"
-            "?code=valid-code&state=test-state",
+            "/api/v1/auth/google/callback?code=valid-code&state=test-state",
             follow_redirects=False,
         )
         assert callback.status_code == 303
@@ -160,9 +165,7 @@ def test_google_login_creates_server_session_and_protects_uploads(
         other_me = client.get("/api/v1/auth/me")
         assert other_me.status_code == 200
         assert second_session.user.user_id != first_user_id
-        hidden_session = client.get(
-            f"/api/v1/upload-sessions/{upload_session_id}"
-        )
+        hidden_session = client.get(f"/api/v1/upload-sessions/{upload_session_id}")
         assert hidden_session.status_code == 404
 
         logout = client.post(
@@ -177,6 +180,144 @@ def test_google_login_creates_server_session_and_protects_uploads(
     app.state.database.dispose()
 
 
+def _promote_project_for_user(
+    app,
+    *,
+    owner_user_id: str,
+    suffix: str,
+) -> tuple[str, str, str]:
+    repository = SqlAlchemyAuditRepository(app.state.database.sessions)
+    session_id = f"upload-{suffix}"
+    file_id = f"file-{suffix}"
+    repository.create_upload_session(
+        session_id=session_id,
+        files=[
+            UploadFileInput(
+                file_id=file_id,
+                relative_path="Process Understanding/evidence.docx",
+                size_bytes=10,
+                content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                staging_object_key=f"staging/{session_id}/{file_id}",
+            )
+        ],
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        actor_id=owner_user_id,
+        actor_label=f"User {suffix}",
+        actor_type="GOOGLE",
+    )
+    repository.complete_upload_validation(
+        session_id,
+        validation_report={"errors": [], "warnings": []},
+        files=[
+            UploadFileValidation(
+                file_id=file_id,
+                content_hash=f"sha256:{suffix}",
+                logical_role=LogicalRole.EVIDENCE,
+                readability_status="READABLE",
+            )
+        ],
+        valid=True,
+    )
+    project, version = repository.promote_upload_session(
+        session_id,
+        project_id=f"project-{suffix}",
+        source_snapshot_id=f"snapshot-{suffix}",
+        version_id=f"version-{suffix}",
+        owner_user_id=owner_user_id,
+        name="Same project name",
+        manifest_hash=f"sha256:manifest-{suffix}",
+        source_object_prefix=f"projects/project-{suffix}/source",
+    )
+    job = repository.enqueue_job(
+        project.project_id,
+        version.version_id,
+        job_id=f"job-{suffix}",
+        job_type=JobType.DISCOVERY,
+        input_hash=f"sha256:input-{suffix}",
+        correlation_id=f"correlation-{suffix}",
+    )
+    return project.project_id, version.version_id, job.job_id
+
+
+def test_projects_versions_and_jobs_are_isolated_by_authenticated_user(
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        settings=_settings(tmp_path),
+        google_oauth_client=FakeGoogleOAuthClient(),
+    )
+    first_session, first_token = app.state.auth_service.sign_in(
+        AuthIdentity(
+            provider="GOOGLE",
+            provider_subject="isolation-user-1",
+            email="isolation-1@example.com",
+            email_verified=True,
+            display_name="Isolation User 1",
+        )
+    )
+    second_session, second_token = app.state.auth_service.sign_in(
+        AuthIdentity(
+            provider="GOOGLE",
+            provider_subject="isolation-user-2",
+            email="isolation-2@example.com",
+            email_verified=True,
+            display_name="Isolation User 2",
+        )
+    )
+    first_project, first_version, first_job = _promote_project_for_user(
+        app, owner_user_id=first_session.user.user_id, suffix="one"
+    )
+    second_project, second_version, second_job = _promote_project_for_user(
+        app, owner_user_id=second_session.user.user_id, suffix="two"
+    )
+
+    with TestClient(app) as client:
+        client.cookies.set("audit_session", first_token)
+        listed = client.get("/api/v1/projects")
+        assert listed.status_code == 200
+        assert [item["project_id"] for item in listed.json()] == [first_project]
+        assert client.get(f"/api/v1/projects/{first_project}").status_code == 200
+        assert client.get(f"/api/v1/projects/{second_project}").status_code == 404
+        assert (
+            client.get(f"/api/v1/projects/{second_project}/versions").status_code == 404
+        )
+        assert client.get(f"/api/v1/jobs/{second_job}").status_code == 404
+        cross_retry = client.post(
+            f"/api/v1/jobs/{second_job}/retry",
+            json={},
+            headers={"X-CSRF-Token": first_session.csrf_token},
+        )
+        assert cross_retry.status_code == 404
+
+        assert (
+            client.get(
+                f"/api/v1/projects/{first_project}/versions/{first_version}"
+            ).status_code
+            == 200
+        )
+        assert client.get(f"/api/v1/jobs/{first_job}").status_code == 200
+
+        client.cookies.set("audit_session", second_token)
+        listed = client.get("/api/v1/projects")
+        assert listed.status_code == 200
+        assert [item["project_id"] for item in listed.json()] == [second_project]
+        assert (
+            client.get(
+                f"/api/v1/projects/{first_project}/versions/{first_version}"
+            ).status_code
+            == 404
+        )
+        assert client.get(f"/api/v1/jobs/{first_job}").status_code == 404
+        assert (
+            client.get(
+                f"/api/v1/projects/{second_project}/versions/{second_version}"
+            ).status_code
+            == 200
+        )
+
+    app.state.database.dispose()
+
+
 def test_google_callback_rejects_state_mismatch(tmp_path: Path) -> None:
     app = create_app(
         settings=_settings(tmp_path),
@@ -185,8 +326,7 @@ def test_google_callback_rejects_state_mismatch(tmp_path: Path) -> None:
     with TestClient(app) as client:
         client.get("/api/v1/auth/google/login", follow_redirects=False)
         response = client.get(
-            "/api/v1/auth/google/callback"
-            "?code=valid-code&state=wrong-state",
+            "/api/v1/auth/google/callback?code=valid-code&state=wrong-state",
             follow_redirects=False,
         )
     assert response.status_code == 400
@@ -201,9 +341,7 @@ def test_configured_google_callback_alias_completes_login(
     settings = ApiSettings(
         **{
             **base_settings.__dict__,
-            "google_redirect_uri": (
-                "http://testserver/api/auth/callback/google"
-            ),
+            "google_redirect_uri": ("http://testserver/api/auth/callback/google"),
         }
     )
     app = create_app(
@@ -217,8 +355,7 @@ def test_configured_google_callback_alias_completes_login(
         )
         assert login.status_code == 302
         callback = client.get(
-            "/api/auth/callback/google"
-            "?code=valid-code&state=test-state",
+            "/api/auth/callback/google?code=valid-code&state=test-state",
             follow_redirects=False,
         )
         assert callback.status_code == 303

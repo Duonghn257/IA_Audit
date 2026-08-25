@@ -43,28 +43,22 @@ def test_migrations_create_uat_workspace_schema(tmp_path, monkeypatch) -> None:
         "upload_files",
         "upload_sessions",
     }
-    assert {
-        index["name"] for index in schema.get_indexes("projects")
-    } == {
+    assert {column["name"] for column in schema.get_columns("projects")} >= {
+        "owner_user_id"
+    }
+    assert {index["name"] for index in schema.get_indexes("projects")} == {
+        "ix_projects_owner_user_id",
         "ix_projects_raw_expires_at",
         "ix_projects_status",
-        "uq_projects_name",
+        "uq_projects_owner_name",
     }
-    assert schema.get_foreign_keys("auth_sessions")[0][
-        "referred_table"
-    ] == "auth_users"
-    assert schema.get_foreign_keys("project_events")[0][
-        "referred_table"
-    ] == "projects"
-    assert schema.get_foreign_keys("source_snapshots")[0][
-        "referred_table"
-    ] == "projects"
-    assert schema.get_foreign_keys("issues")[0][
-        "referred_table"
-    ] == "project_versions"
-    issue_columns = {
-        column["name"] for column in schema.get_columns("issues")
-    }
+    assert schema.get_foreign_keys("auth_sessions")[0]["referred_table"] == "auth_users"
+    assert schema.get_foreign_keys("project_events")[0]["referred_table"] == "projects"
+    assert (
+        schema.get_foreign_keys("source_snapshots")[0]["referred_table"] == "projects"
+    )
+    assert schema.get_foreign_keys("issues")[0]["referred_table"] == "project_versions"
+    issue_columns = {column["name"] for column in schema.get_columns("issues")}
     assert {"evidence_refs", "sop_refs"} <= issue_columns
     engine.dispose()
 

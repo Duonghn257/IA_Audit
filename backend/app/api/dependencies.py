@@ -1,4 +1,5 @@
 """FastAPI dependency accessors."""
+
 from __future__ import annotations
 
 import secrets
@@ -18,6 +19,7 @@ from app.application.project_manager import ProjectManager
 from app.application.run_manager import RunManager
 from app.core.settings import ApiSettings
 from app.domain.auth import AuthUser
+from app.domain.projects import ProjectNotFoundError, ProjectRecord
 from app.infrastructure.google_oauth import GoogleOAuthClient
 
 
@@ -65,9 +67,7 @@ def get_current_principal(
             session_id=None,
             expires_at=None,
         )
-    session = auth_service.authenticate(
-        request.cookies.get(settings.auth_cookie_name)
-    )
+    session = auth_service.authenticate(request.cookies.get(settings.auth_cookie_name))
     if session is None:
         raise ApiError(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -114,6 +114,24 @@ def get_path_resolver(request: Request) -> LocalPathResolver:
 
 def get_project_manager(request: Request) -> ProjectManager:
     return request.app.state.project_manager
+
+
+def require_owned_project(
+    project_id: str,
+    principal: Annotated[AuthPrincipal, Depends(get_current_principal)],
+    manager: Annotated[ProjectManager, Depends(get_project_manager)],
+) -> ProjectRecord:
+    try:
+        return manager.get(
+            project_id,
+            owner_user_id=principal.user.user_id,
+        )
+    except ProjectNotFoundError as exc:
+        raise ApiError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="PROJECT_NOT_FOUND",
+            message=f"Project not found: {project_id}",
+        ) from exc
 
 
 def get_audit_intake_service(request: Request) -> AuditIntakeService:

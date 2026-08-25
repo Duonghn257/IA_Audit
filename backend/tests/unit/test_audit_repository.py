@@ -59,6 +59,7 @@ def _create_project(repository: SqlAlchemyAuditRepository) -> tuple[str, str]:
         project_id="project-1",
         source_snapshot_id="snapshot-1",
         version_id="version-1",
+        owner_user_id="uat_shared_user",
         name="FY2026 Access Review",
         manifest_hash="sha256:manifest-1",
         source_object_prefix="projects/project-1/source",
@@ -114,6 +115,7 @@ def test_promotes_valid_staging_to_project_and_rejects_duplicate_name(tmp_path) 
             project_id="project-2",
             source_snapshot_id="snapshot-2",
             version_id="version-2",
+            owner_user_id="uat_shared_user",
             name="FY2026 Access Review",
             manifest_hash="sha256:manifest-2",
             source_object_prefix="projects/project-2/source",
@@ -124,6 +126,7 @@ def test_promotes_valid_staging_to_project_and_rejects_duplicate_name(tmp_path) 
         project_id="project-2",
         source_snapshot_id="snapshot-2",
         version_id="version-2",
+        owner_user_id="uat_shared_user",
         name="FY2026 Access Review - rerun",
         manifest_hash="sha256:manifest-2",
         source_object_prefix="projects/project-2/source",
@@ -207,7 +210,9 @@ def test_versions_issues_jobs_and_output_revisions_are_isolated(tmp_path) -> Non
         source_refs=[],
     )
     assert updated.row_version == copied_issue.row_version + 1
-    assert repository.list_versions(project_id)[1].state == AuditVersionState.STALE_OUTPUT
+    assert (
+        repository.list_versions(project_id)[1].state == AuditVersionState.STALE_OUTPUT
+    )
     with pytest.raises(VersionConflictError):
         repository.update_issue(
             version_two.version_id,
@@ -263,8 +268,14 @@ def test_jobs_are_idempotent_and_persist_events(tmp_path) -> None:
         total_items=2,
     )
     assert repository.list_job_events(job.job_id) == [event]
-    assert repository.finish_job(job.job_id, state=JobState.SUCCEEDED).state == JobState.SUCCEEDED
-    assert repository.list_versions(project_id)[0].state == AuditVersionState.CANDIDATES_READY
+    assert (
+        repository.finish_job(job.job_id, state=JobState.SUCCEEDED).state
+        == JobState.SUCCEEDED
+    )
+    assert (
+        repository.list_versions(project_id)[0].state
+        == AuditVersionState.CANDIDATES_READY
+    )
     assert repository.get_job(job.job_id).state == JobState.SUCCEEDED
     assert repository.list_jobs_for_version(version_id)[0].job_id == job.job_id
     with pytest.raises(JobNotRetryableError):

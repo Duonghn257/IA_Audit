@@ -1,4 +1,5 @@
 """SQLAlchemy implementation of persistent project metadata."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -25,10 +26,16 @@ def _utcnow() -> datetime:
 class ProjectModel(Base):
     __tablename__ = "projects"
     __table_args__ = (
-        Index("uq_projects_name", "name", unique=True),
+        Index(
+            "uq_projects_owner_name",
+            "owner_user_id",
+            "name",
+            unique=True,
+        ),
     )
 
     project_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(String(255), index=True)
     name: Mapped[str] = mapped_column(String(255))
     source_type: Mapped[str] = mapped_column(
         String(32),
@@ -38,12 +45,8 @@ class ProjectModel(Base):
     current_activity: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True)
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True)
-    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     storage_path: Mapped[str | None] = mapped_column(Text)
     output_path: Mapped[str | None] = mapped_column(Text)
     version: Mapped[str | None] = mapped_column(String(32))
@@ -53,9 +56,7 @@ class ProjectModel(Base):
         DateTime(timezone=True),
         index=True,
     )
-    raw_deleted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True)
-    )
+    raw_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     events: Mapped[list["ProjectEventModel"]] = relationship(
         back_populates="project",
         cascade="all, delete-orphan",
@@ -91,12 +92,14 @@ class SqlAlchemyProjectRepository:
         self,
         *,
         project_id: str,
+        owner_user_id: str,
         name: str,
         raw_expires_at: datetime,
     ) -> ProjectRecord:
         now = _utcnow()
         model = ProjectModel(
             project_id=project_id,
+            owner_user_id=owner_user_id,
             name=name,
             source_type="FILE_UPLOAD",
             status=ProjectStatus.UPLOADING.value,
@@ -198,14 +201,22 @@ class SqlAlchemyProjectRepository:
             model.updated_at = now
         return _to_record(model)
 
-    def get(self, project_id: str) -> ProjectRecord:
+    def get(self, project_id: str, *, owner_user_id: str) -> ProjectRecord:
         with self._sessions() as session:
-            return _to_record(_get_model(session, project_id))
+            return _to_record(
+                _get_model(
+                    session,
+                    project_id,
+                    owner_user_id=owner_user_id,
+                )
+            )
 
-    def list(self) -> list[ProjectRecord]:
+    def list(self, *, owner_user_id: str) -> list[ProjectRecord]:
         with self._sessions() as session:
             models = session.scalars(
-                select(ProjectModel).order_by(ProjectModel.created_at.desc())
+                select(ProjectModel)
+                .where(ProjectModel.owner_user_id == owner_user_id)
+                .order_by(ProjectModel.created_at.desc())
             ).all()
             return [_to_record(model) for model in models]
 
@@ -213,10 +224,15 @@ class SqlAlchemyProjectRepository:
         self,
         project_id: str,
         *,
+        owner_user_id: str,
         after_event_id: int = 0,
     ) -> list[ProjectEvent]:
         with self._sessions() as session:
-            _get_model(session, project_id)
+            _get_model(
+                session,
+                project_id,
+                owner_user_id=owner_user_id,
+            )
             models = session.scalars(
                 select(ProjectEventModel)
                 .where(
@@ -257,8 +273,16 @@ class SqlAlchemyProjectRepository:
         return _to_record(model)
 
 
-def _get_model(session: Session, project_id: str) -> ProjectModel:
-    model = session.get(ProjectModel, project_id)
+def _get_model(
+    session: Session,
+    project_id: str,
+    *,
+    owner_user_id: str | None = None,
+) -> ProjectModel:
+    statement = select(ProjectModel).where(ProjectModel.project_id == project_id)
+    if owner_user_id is not None:
+        statement = statement.where(ProjectModel.owner_user_id == owner_user_id)
+    model = session.scalars(statement).first()
     if model is None:
         raise ProjectNotFoundError(project_id)
     return model
@@ -270,8 +294,7 @@ def _require_status(
 ) -> None:
     if model.status != expected.value:
         raise ProjectTransitionError(
-            f"Project {model.project_id} is {model.status}, "
-            f"expected {expected.value}"
+            f"Project {model.project_id} is {model.status}, expected {expected.value}"
         )
 
 

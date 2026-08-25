@@ -1,4 +1,5 @@
 """Application service for UAT upload sessions and immutable source intake."""
+
 from __future__ import annotations
 
 import hashlib
@@ -99,9 +100,7 @@ class AuditIntakeRepository(Protocol):
 
     def list_upload_files(self, session_id: str) -> list[UploadFileRecord]: ...
 
-    def get_upload_file(
-        self, session_id: str, file_id: str
-    ) -> UploadFileRecord: ...
+    def get_upload_file(self, session_id: str, file_id: str) -> UploadFileRecord: ...
 
     def mark_upload_file_uploaded(
         self, session_id: str, file_id: str
@@ -123,6 +122,7 @@ class AuditIntakeRepository(Protocol):
         project_id: str,
         source_snapshot_id: str,
         version_id: str,
+        owner_user_id: str,
         name: str,
         manifest_hash: str,
         source_object_prefix: str,
@@ -198,9 +198,7 @@ class AuditIntakeService:
                     relative_path=descriptor.relative_path,
                     size_bytes=descriptor.size_bytes,
                     content_type=descriptor.content_type,
-                    staging_object_key=self._storage.staging_key(
-                        session_id, file_id
-                    ),
+                    staging_object_key=self._storage.staging_key(session_id, file_id),
                     modified_at=descriptor.modified_at,
                 )
             )
@@ -244,9 +242,7 @@ class AuditIntakeService:
             chunks,
             expected_size=file.size_bytes,
         )
-        uploaded = self._repository.mark_upload_file_uploaded(
-            session_id, file_id
-        )
+        uploaded = self._repository.mark_upload_file_uploaded(session_id, file_id)
         return self._file_view(uploaded)
 
     def validate_session(
@@ -375,9 +371,7 @@ class AuditIntakeService:
 
         files = self._repository.list_upload_files(session_id)
         project_id = str(uuid4())
-        promoted = self._storage.promote_uploads(
-            session_id, project_id, files
-        )
+        promoted = self._storage.promote_uploads(session_id, project_id, files)
         manifest_hash = _manifest_hash(files)
         try:
             project, version = self._repository.promote_upload_session(
@@ -385,6 +379,7 @@ class AuditIntakeService:
                 project_id=project_id,
                 source_snapshot_id=str(uuid4()),
                 version_id=str(uuid4()),
+                owner_user_id=session.actor_id,
                 name=project_name,
                 manifest_hash=manifest_hash,
                 source_object_prefix=promoted.object_prefix,
@@ -413,9 +408,7 @@ class AuditIntakeService:
     ) -> UploadSessionRecord:
         session = self._session_for_actor(session_id, actor_id)
         if session.expires_at <= datetime.now(timezone.utc):
-            raise AuditStateError(
-                f"Upload session {session_id} has expired."
-            )
+            raise AuditStateError(f"Upload session {session_id} has expired.")
         return session
 
     def _session_for_actor(
@@ -431,9 +424,7 @@ class AuditIntakeService:
     def _view(self, session: UploadSessionRecord) -> UploadSessionView:
         files = tuple(
             self._file_view(file)
-            for file in self._repository.list_upload_files(
-                session.session_id
-            )
+            for file in self._repository.list_upload_files(session.session_id)
         )
         actions: list[str] = ["DISCARD"]
         reasons: dict[str, str] = {}
@@ -459,9 +450,7 @@ class AuditIntakeService:
         return UploadFileView(
             file=file,
             upload_method="PUT",
-            upload_url=self._storage.upload_url(
-                file.session_id, file.file_id
-            ),
+            upload_url=self._storage.upload_url(file.session_id, file.file_id),
             required_headers=headers,
         )
 
@@ -477,10 +466,7 @@ class AuditIntakeService:
             path = _normalize_relative_path(file.relative_path)
             suffix = PurePosixPath(path).suffix.lower()
             filename = PurePosixPath(path).name
-            if (
-                suffix not in _SUPPORTED_EXTENSIONS
-                or filename.startswith(("~$", ".~"))
-            ):
+            if suffix not in _SUPPORTED_EXTENSIONS or filename.startswith(("~$", ".~")):
                 continue
             if _project_folder(path) is None:
                 continue
@@ -507,9 +493,7 @@ class AuditIntakeService:
                 f"Folder contains more than {self._max_files} supported files."
             )
         if total_bytes > self._max_total_bytes:
-            raise ValueError(
-                f"Folder exceeds the {self._max_total_bytes} byte limit."
-            )
+            raise ValueError(f"Folder exceeds the {self._max_total_bytes} byte limit.")
         return normalized
 
 
@@ -536,9 +520,7 @@ def _project_folder(relative_path: str) -> tuple[str, str | None] | None:
     if len(parts) >= 3 and parts[1] in _REQUIRED_FOLDERS:
         return parts[1], parts[0]
     candidate = parts[1] if len(parts) >= 3 else parts[0]
-    expected_by_casefold = {
-        folder.casefold(): folder for folder in _REQUIRED_FOLDERS
-    }
+    expected_by_casefold = {folder.casefold(): folder for folder in _REQUIRED_FOLDERS}
     expected = expected_by_casefold.get(candidate.casefold())
     if expected is not None:
         raise ValueError(
@@ -578,13 +560,9 @@ def _manifest_hash(files: Sequence[UploadFileRecord]) -> str:
         {
             "relative_path": file.relative_path,
             "content_hash": file.content_hash,
-            "logical_role": (
-                file.logical_role.value if file.logical_role else None
-            ),
+            "logical_role": (file.logical_role.value if file.logical_role else None),
         }
         for file in sorted(files, key=lambda item: item.relative_path)
     ]
-    encoded = json.dumps(
-        payload, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"

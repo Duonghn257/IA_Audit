@@ -1,4 +1,5 @@
 """Project upload, processing and retention orchestration."""
+
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
@@ -41,6 +42,7 @@ class ProjectManager:
     def submit_upload(
         self,
         *,
+        owner_user_id: str,
         name: str,
         files: Sequence[IncomingProjectFile],
     ) -> ProjectRecord:
@@ -48,6 +50,7 @@ class ProjectManager:
         now = datetime.now(timezone.utc)
         self._repository.create(
             project_id=project_id,
+            owner_user_id=owner_user_id,
             name=name,
             raw_expires_at=now + timedelta(days=self._raw_retention_days),
         )
@@ -61,8 +64,7 @@ class ProjectManager:
                 project_id,
                 stage="UPLOAD",
                 message=(
-                    f"Uploaded {stored.file_count} files "
-                    f"({stored.total_bytes:,} bytes)"
+                    f"Uploaded {stored.file_count} files ({stored.total_bytes:,} bytes)"
                 ),
                 completed_steps=0,
                 total_steps=8,
@@ -80,20 +82,22 @@ class ProjectManager:
         )
         return project
 
-    def get(self, project_id: str) -> ProjectRecord:
-        return self._repository.get(project_id)
+    def get(self, project_id: str, *, owner_user_id: str) -> ProjectRecord:
+        return self._repository.get(project_id, owner_user_id=owner_user_id)
 
-    def list(self) -> list[ProjectRecord]:
-        return self._repository.list()
+    def list(self, *, owner_user_id: str) -> list[ProjectRecord]:
+        return self._repository.list(owner_user_id=owner_user_id)
 
     def list_events(
         self,
         project_id: str,
         *,
+        owner_user_id: str,
         after_event_id: int = 0,
     ) -> list[ProjectEvent]:
         return self._repository.list_events(
             project_id,
+            owner_user_id=owner_user_id,
             after_event_id=after_event_id,
         )
 
@@ -152,4 +156,3 @@ class ProjectManager:
             total_steps=progress.total_steps,
             warning=progress.warning,
         )
-
