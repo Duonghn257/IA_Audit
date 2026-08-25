@@ -13,7 +13,7 @@ Project & artefacts → enter/import auditor inputs → review → upload
 From the repository root:
 
 ```bash
-docker compose up --build -d
+docker compose --env-file frontend/.env up --build -d
 # Open http://127.0.0.1:3010 in your browser
 ```
 
@@ -26,12 +26,19 @@ Node 22 or newer is recommended:
 
 ```bash
 cd frontend
+cp .env.example .env
 npm install
 npm run dev
 ```
 
 Vite serves the app on `http://127.0.0.1:5173` and proxies API calls to the
 Docker backend on port `8010`.
+
+`VITE_API_BASE_URL` controls the backend origin used by all requests in
+`src/shared/api/projects.ts`. Set only the origin, for example
+`http://10.22.14.6:3000/`; the API client appends `/api/v1` automatically. If
+the variable is empty, requests use the same origin as the frontend. Restart
+the Vite development server after changing `.env`.
 
 ## Validation
 

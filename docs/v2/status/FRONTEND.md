@@ -18,6 +18,28 @@ Project & artefacts
   → Live processing → Completed/Failed → Download
 ```
 
+## UAT v2 UI refresh (24/08/2026)
+
+Frontend đã có information architecture **2 route + modal** theo bộ thiết kế
+`frontend/design/uat-v2/`:
+
+- `/projects`: dashboard dạng bảng, status theo workflow v2 và mở Project Detail.
+- `/projects/:projectId`: shared project/version header và ba tab
+  `Source & discovery`, `Candidate issues`, `Runs & outputs`.
+- New Project dùng hai bước staging upload -> server validation -> promote project;
+  không còn auditor JSON trong happy path và không tự chạy discovery.
+- `Source & discovery` chỉ hiện progress sau khi bấm **Find candidates**; lỗi
+  `INCOMPLETE` thay CTA bằng **View error / Retry**.
+- Candidate Register dùng body hai cột; Audit confirmation giữ frozen snapshot.
+- Runs & outputs giữ output revision cũ và cho tải theo từng revision.
+
+Các component dùng chung nằm trong `frontend/src/modules/projects/`, gồm
+`WorkspaceHeader`, `ProjectDetailHeader`, ba tab body và các modal độc lập.
+API discovery/Audit hiện vẫn trả `501 AI_PIPELINE_NOT_IMPLEMENTED`; UI đã hiển thị
+lỗi/retry theo contract, không giả lập job thành công.
+
+Baseline sau thay đổi: typecheck pass, 8 unit tests pass và production build pass.
+
 ## Checklist chức năng
 
 | Chức năng | Trạng thái | Bằng chứng trong source |
