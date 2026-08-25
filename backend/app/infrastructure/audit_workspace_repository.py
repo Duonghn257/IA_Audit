@@ -1,7 +1,7 @@
 """Persistence operations for projects, versions, issues and citations."""
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -16,8 +16,8 @@ from app.domain.audit import (
     IssueRecord,
     IssueStatus,
     ProjectVersionRecord,
-    SourceRefKind,
     SourceReferenceInput,
+    SourceRefKind,
     VersionConflictError,
 )
 from app.infrastructure.audit_models import IssueModel, ProjectVersionModel
@@ -99,6 +99,8 @@ class SqlAlchemyAuditWorkspaceRepository:
                     title_hint=issue.title_hint,
                     observed_gap=issue.observed_gap,
                     evidence_summary=issue.evidence_summary,
+                    evidence_refs=list(issue.evidence_refs or ()),
+                    sop_refs=list(issue.sop_refs or ()),
                     risk_category=issue.risk_category,
                     confidence=issue.confidence,
                     validation_flags=list(issue.validation_flags),
@@ -134,6 +136,8 @@ class SqlAlchemyAuditWorkspaceRepository:
         observed_gap: str,
         title_hint: str | None = None,
         evidence_summary: str | None = None,
+        evidence_refs: Sequence[str] = (),
+        sop_refs: Sequence[str] = (),
         risk_category: str | None = None,
         confidence: float | None = None,
         validation_flags: Sequence[str] = (),
@@ -153,6 +157,8 @@ class SqlAlchemyAuditWorkspaceRepository:
                 title_hint=title_hint,
                 observed_gap=observed_gap,
                 evidence_summary=evidence_summary,
+                evidence_refs=list(evidence_refs),
+                sop_refs=list(sop_refs),
                 risk_category=risk_category,
                 confidence=confidence,
                 validation_flags=list(validation_flags),
@@ -191,6 +197,8 @@ class SqlAlchemyAuditWorkspaceRepository:
         observed_gap: str,
         title_hint: str | None,
         evidence_summary: str | None,
+        evidence_refs: Sequence[str] = (),
+        sop_refs: Sequence[str] = (),
         risk_category: str | None,
         confidence: float | None,
         validation_flags: Sequence[str],
@@ -211,6 +219,8 @@ class SqlAlchemyAuditWorkspaceRepository:
             issue.observed_gap = observed_gap
             issue.title_hint = title_hint
             issue.evidence_summary = evidence_summary
+            issue.evidence_refs = list(evidence_refs)
+            issue.sop_refs = list(sop_refs)
             issue.risk_category = risk_category
             issue.confidence = confidence
             issue.validation_flags = list(validation_flags)

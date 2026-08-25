@@ -15,6 +15,8 @@ from app.domain.audit import (
     AuditStateError,
     AuditVersionNotFoundError,
     DuplicateProjectNameError,
+    JobNotRetryableError,
+    SourceNotReadyError,
     UploadFileNotFoundError,
     UploadSessionNotFoundError,
     VersionConflictError,
@@ -59,6 +61,21 @@ def audit_api_errors() -> Iterator[None]:
             code="ACTIVE_JOB_CONFLICT",
             message="An equivalent job is already queued or running.",
             details={"job_id": _error_value(exc)},
+        ) from exc
+    except JobNotRetryableError as exc:
+        raise ApiError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="JOB_NOT_RETRYABLE",
+            message=(
+                "Only FAILED or INCOMPLETE jobs can be retried."
+            ),
+            details={"job_id": _error_value(exc)},
+        ) from exc
+    except SourceNotReadyError as exc:
+        raise ApiError(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            code="SOURCE_NOT_READY",
+            message=str(exc),
         ) from exc
     except AuditStateError as exc:
         raise ApiError(

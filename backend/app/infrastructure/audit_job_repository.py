@@ -1,8 +1,10 @@
 """Durable job, progress, audit-input and output persistence operations."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import timedelta
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -12,29 +14,39 @@ from app.domain.audit import (
     AuditStateError,
     AuditVersionNotFoundError,
     AuditVersionState,
+    CandidateIssueInput,
+    IssueOrigin,
+    IssueStatus,
     JobEventRecord,
+    JobNotRetryableError,
     JobRecord,
     JobState,
     JobType,
+    LogicalRole,
     OutputRevisionRecord,
     OutputStatus,
     ProjectState,
+    SourceDocumentRecord,
 )
 from app.infrastructure.audit_models import (
     AuditInputSnapshotModel,
+    IssueModel,
     JobEventModel,
     JobModel,
     OutputRevisionModel,
+    SourceDocumentModel,
 )
 from app.infrastructure.audit_persistence import (
     ensure_no_active_job,
     get_job,
     get_project,
+    get_snapshot,
     get_version,
     to_job_event_record,
     to_job_record,
     to_output_record,
     to_snapshot_record,
+    touch_issue_workspace,
     utcnow,
     version_state_from_outputs,
 )
@@ -57,6 +69,33 @@ class SqlAlchemyAuditJobRepository:
                 .order_by(JobModel.created_at.desc(), JobModel.job_id.desc())
             ).all()
             return [to_job_record(job) for job in jobs]
+
+    def list_source_documents(
+        self, project_id: str
+    ) -> list[SourceDocumentRecord]:
+        with self._sessions() as session:
+            snapshot = get_snapshot(session, project_id)
+            documents = session.scalars(
+                select(SourceDocumentModel)
+                .where(SourceDocumentModel.snapshot_id == snapshot.snapshot_id)
+                .order_by(
+                    SourceDocumentModel.relative_path,
+                    SourceDocumentModel.document_id,
+                )
+            ).all()
+            return [
+                SourceDocumentRecord(
+                    document_id=document.document_id,
+                    snapshot_id=document.snapshot_id,
+                    relative_path=document.relative_path,
+                    logical_role=LogicalRole(document.logical_role),
+                    original_object_key=document.original_object_key,
+                    content_hash=document.content_hash,
+                    size_bytes=document.size_bytes,
+                    content_type=document.content_type,
+                )
+                for document in documents
+            ]
 
     def enqueue_job(
         self,
@@ -154,6 +193,26 @@ class SqlAlchemyAuditJobRepository:
             job.updated_at = now
         return to_job_record(job)
 
+    def claim_job(
+        self,
+        job_id: str,
+        worker_id: str,
+        *,
+        lease_seconds: int = 300,
+    ) -> JobRecord | None:
+        now = utcnow()
+        with self._sessions.begin() as session:
+            job = get_job(session, job_id, lock=True)
+            if job.state != JobState.QUEUED.value:
+                return None
+            job.state = JobState.RUNNING.value
+            job.lease_owner = worker_id
+            job.lease_expires_at = now + timedelta(seconds=lease_seconds)
+            job.heartbeat_at = now
+            job.attempt_count += 1
+            job.updated_at = now
+        return to_job_record(job)
+
     def append_job_event(
         self,
         job_id: str,
@@ -187,6 +246,74 @@ class SqlAlchemyAuditJobRepository:
             session.add(event)
             session.flush()
         return to_job_event_record(event)
+
+    def complete_discovery(
+        self,
+        job_id: str,
+        candidates: Sequence[CandidateIssueInput],
+    ) -> JobRecord:
+        now = utcnow()
+        with self._sessions.begin() as session:
+            job = get_job(session, job_id, lock=True)
+            if (
+                job.job_type != JobType.DISCOVERY.value
+                or job.state != JobState.RUNNING.value
+            ):
+                raise AuditStateError(
+                    "Only a running Discovery job can publish candidates."
+                )
+            version = get_version(
+                session, job.project_version_id, lock=True
+            )
+            existing = session.scalars(
+                select(IssueModel).where(
+                    IssueModel.project_version_id == version.version_id,
+                    IssueModel.origin == IssueOrigin.AI_DISCOVERED.value,
+                )
+            ).all()
+            for issue in existing:
+                session.delete(issue)
+            session.flush()
+            for candidate in candidates:
+                session.add(
+                    IssueModel(
+                        issue_id=str(uuid4()),
+                        project_version_id=version.version_id,
+                        origin=IssueOrigin.AI_DISCOVERED.value,
+                        status=IssueStatus.READY_FOR_REVIEW.value,
+                        title_hint=candidate.title_hint,
+                        observed_gap=candidate.observed_gap,
+                        evidence_summary=candidate.evidence_summary,
+                        evidence_refs=list(candidate.evidence_refs),
+                        sop_refs=list(candidate.sop_refs),
+                        risk_category=candidate.risk_category or None,
+                        confidence=None,
+                        validation_flags=[],
+                        row_version=1,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+            touch_issue_workspace(session, version, now)
+            if version.state != AuditVersionState.STALE_OUTPUT.value:
+                version.state = AuditVersionState.CANDIDATES_READY.value
+            project = get_project(session, job.project_id, lock=True)
+            project.status = ProjectState.CANDIDATES_AVAILABLE.value
+            project.current_activity = (
+                f"{len(candidates)} candidate issues ready for review"
+            )
+            project.updated_at = now
+            job.state = JobState.SUCCEEDED.value
+            job.stage = "COMPLETE"
+            job.current_message = project.current_activity
+            job.completed_items = len(candidates)
+            job.total_items = len(candidates)
+            job.error = None
+            job.lease_owner = None
+            job.lease_expires_at = None
+            job.updated_at = now
+            session.flush()
+            return to_job_record(job)
 
     def finish_job(self, job_id: str, *, state: JobState, error: str | None = None) -> JobRecord:
         if state not in {JobState.SUCCEEDED, JobState.INCOMPLETE, JobState.FAILED}:
@@ -266,12 +393,29 @@ class SqlAlchemyAuditJobRepository:
             ).order_by(JobEventModel.event_id)).all()
             return [to_job_event_record(event) for event in events]
 
-    def retry_job(self, job_id: str) -> JobRecord:
+    def retry_job(
+        self, job_id: str, *, reason: str | None = None
+    ) -> JobRecord:
         now = utcnow()
         with self._sessions.begin() as session:
             job = get_job(session, job_id, lock=True)
-            if JobState(job.state).is_active:
-                raise AuditStateError("Only a terminal job can be retried.")
+            if JobState(job.state) not in {
+                JobState.FAILED,
+                JobState.INCOMPLETE,
+            }:
+                raise JobNotRetryableError(job_id)
+            if reason:
+                session.add(
+                    JobEventModel(
+                        job_id=job_id,
+                        stage="RETRY_QUEUED",
+                        message=reason,
+                        completed_items=0,
+                        total_items=None,
+                        warning=False,
+                        occurred_at=now,
+                    )
+                )
             job.state = JobState.QUEUED.value
             job.stage = None
             job.completed_items = 0

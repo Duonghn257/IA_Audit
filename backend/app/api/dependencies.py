@@ -9,9 +9,10 @@ from typing import Annotated
 from fastapi import Depends, Request, status
 
 from app.api.errors import ApiError
-from app.application.auth_service import AuthService
 from app.application.audit_intake_service import AuditIntakeService
 from app.application.audit_workspace_service import AuditWorkspaceService
+from app.application.auth_service import AuthService
+from app.application.discovery_service import DiscoveryService
 from app.application.path_resolver import LocalPathResolver
 from app.application.project_manager import ProjectManager
 from app.application.run_manager import RunManager
@@ -121,6 +122,10 @@ def get_audit_intake_service(request: Request) -> AuditIntakeService:
 
 def get_audit_workspace_service(request: Request) -> AuditWorkspaceService:
     return request.app.state.audit_workspace_service
+
+
+def get_discovery_service(request: Request) -> DiscoveryService:
+    return request.app.state.discovery_service
 
 
 SettingsDependency = Annotated[ApiSettings, Depends(get_settings)]

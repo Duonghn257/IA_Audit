@@ -177,12 +177,12 @@ Với cùng scope và `Idempotency-Key`:
 
 | Status | Method | Path | Mục đích | Success |
 |---|---|---|---|---|
-| STUB | `POST` | `/projects/{project_id}/versions/{version_id}/discovery-jobs` | Tìm AI candidate issues | `202 Job` |
+| READY | `POST` | `/projects/{project_id}/versions/{version_id}/discovery-jobs` | Enqueue Discovery qua injectable AI adapter | `202 Job` |
 | STUB | `POST` | `/projects/{project_id}/versions/{version_id}/audit-jobs` | Freeze input và tạo Issue Log DOCX | `202 Job` |
 | READY | `GET` | `/jobs/{job_id}` | Đọc job snapshot/progress | `200 Job` |
 | READY | `GET` | `/jobs/{job_id}/events` | Poll durable events | `200 JobEvent[]` |
 | READY | `GET` | `/jobs/{job_id}/events/stream` | Stream durable events bằng SSE | `200 text/event-stream` |
-| TARGET | `POST` | `/jobs/{job_id}/retry` | Retry terminal job an toàn | `202 Job` |
+| READY | `POST` | `/jobs/{job_id}/retry` | Retry job `FAILED`/`INCOMPLETE` an toàn | `202 Job` |
 | READY | `GET` | `/projects/{project_id}/versions/{version_id}/outputs` | List immutable output revisions | `200 OutputRevision[]` |
 | TARGET | `GET` | `/projects/{project_id}/versions/{version_id}/outputs/{output_id}/download` | Tải DOCX thuộc đúng project/version | `200 DOCX` hoặc `302` |
 
@@ -324,6 +324,12 @@ DOCX. Sequence được cấp ở cấp project: `v0.1`, `v0.2`, ...
   "observed_gap": "Quarterly access review evidence was not retained.",
   "title_hint": "Access review evidence retention",
   "evidence_summary": "One of four quarterly review packages was unavailable.",
+  "evidence_refs": [
+    "Process Understanding/Access Review.xlsx - Sheet Review"
+  ],
+  "sop_refs": [
+    "Process SOP/Access Review SOP.docx - Section 3.2"
+  ],
   "risk_category": "Access Management",
   "confidence": 0.86,
   "validation_flags": [],
@@ -355,7 +361,9 @@ DOCX. Sequence được cấp ở cấp project: `v0.1`, `v0.2`, ...
 | `evidence_summary` | AI candidate required; manual issue optional |
 | `risk_category` | Optional |
 | `confidence` | `0..1`, AI-owned; manual issue có thể `null` |
-| `source_refs` | AI candidate cần ít nhất một `EVIDENCE` và một `CRITERIA`; manual optional |
+| `evidence_refs` | Discovery candidate cần ít nhất một evidence reference string |
+| `sop_refs` | Discovery candidate cần ít nhất một SOP/criteria reference string |
+| `source_refs` | Compatibility view cho client cũ; frontend mới tự gộp hai mảng trên khi cần hiển thị |
 | `location` | Object theo loại file: page/section hoặc sheet/range |
 | `quote` | Optional short excerpt; không thay thế document provenance |
 
@@ -804,8 +812,12 @@ chỉ được phép khi không có discovery active và phải tạo attempt c�
 **Output — `202 Job`:** `job_type = DISCOVERY`, thường state `QUEUED`.
 
 **Lỗi chính:** `404 VERSION_NOT_FOUND`, `409 ACTIVE_JOB_CONFLICT`,
-`409 INVALID_STATE`, `422 SOURCE_NOT_READY`,
-`501 AI_PIPELINE_NOT_IMPLEMENTED` trong runtime hiện tại.
+`409 INVALID_STATE`, `422 SOURCE_NOT_READY`.
+
+Runtime đã có durable orchestration, persistence và retry. AI engine được inject
+qua application port; adapter mặc định chuyển job sang `FAILED` với error rõ
+ràng cho tới khi đội AI cung cấp implementation. API vẫn trả `202 Job` để
+frontend theo dõi trạng thái thống nhất.
 
 ### 9.2 POST `/projects/{project_id}/versions/{version_id}/audit-jobs`
 
@@ -1034,8 +1046,9 @@ không phải public HTTP contract và vẫn được giữ.
 | Issue list | Trả array | IssuePage có cursor |
 | Issue update | `PUT`, full editable payload | `PATCH`, partial business fields |
 | Disposition comment | Chưa có | Optional `comment` và audit trail |
-| Discovery/Audit | Route trả `501 AI_PIPELINE_NOT_IMPLEMENTED` | Durable `202 Job` |
-| Retry | Backend method hiện trả job trực tiếp | `202`, idempotency và retry reason |
+| Discovery | Durable `202 Job`; adapter mặc định fail có kiểm soát khi AI chưa cấu hình | Inject AI engine production |
+| Audit | Route trả `501 AI_PIPELINE_NOT_IMPLEMENTED` | Durable `202 Job` |
+| Retry | `202` cho `FAILED`/`INCOMPLETE`, lưu retry reason | Bổ sung idempotency-key persistence |
 | Output download | Global `/outputs/{output_id}/download`, trả `501` | Nested project/version path |
 | Idempotency | Chưa enforce đồng đều | Required cho command endpoint |
 | UAT limits | Đã enforce 20 files và 100,000,000 bytes | Giữ cấu hình tương đương trên S3 |

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.domain.audit import (
     JobEventRecord,
@@ -21,6 +21,10 @@ class StartDiscoveryRequest(BaseModel):
 
 class StartAuditRequest(BaseModel):
     issue_revision: int
+
+
+class RetryJobRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
 
 
 class JobResponse(BaseModel):
@@ -41,7 +45,7 @@ class JobResponse(BaseModel):
     error: str | None
 
     @classmethod
-    def from_domain(cls, value: JobRecord) -> "JobResponse":
+    def from_domain(cls, value: JobRecord) -> JobResponse:
         fields = cls.model_fields
         return cls(**{name: getattr(value, name) for name in fields})
 
@@ -57,7 +61,7 @@ class JobEventResponse(BaseModel):
     occurred_at: datetime
 
     @classmethod
-    def from_domain(cls, value: JobEventRecord) -> "JobEventResponse":
+    def from_domain(cls, value: JobEventRecord) -> JobEventResponse:
         return cls(**value.__dict__)
 
 
@@ -72,7 +76,7 @@ class OutputRevisionResponse(BaseModel):
     download_url: str
 
     @classmethod
-    def from_domain(cls, value: OutputRevisionRecord) -> "OutputRevisionResponse":
+    def from_domain(cls, value: OutputRevisionRecord) -> OutputRevisionResponse:
         return cls(
             output_id=value.output_id,
             project_version_id=value.project_version_id,

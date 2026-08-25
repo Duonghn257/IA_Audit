@@ -1,8 +1,9 @@
 """Application service for the editable audit workspace API."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol, Sequence
+from typing import Protocol
 from uuid import uuid4
 
 from app.domain.audit import (
@@ -36,7 +37,9 @@ class AuditWorkspaceRepository(Protocol):
     def get_job(self, job_id: str) -> JobRecord: ...
     def list_jobs_for_version(self, version_id: str) -> list[JobRecord]: ...
     def list_job_events(self, job_id: str, *, after_event_id: int = 0) -> list[JobEventRecord]: ...
-    def retry_job(self, job_id: str) -> JobRecord: ...
+    def retry_job(
+        self, job_id: str, *, reason: str | None = None
+    ) -> JobRecord: ...
     def list_output_revisions(self, version_id: str) -> list[OutputRevisionRecord]: ...
 
 
@@ -80,6 +83,8 @@ class AuditWorkspaceService:
         observed_gap: str,
         title_hint: str | None,
         evidence_summary: str | None,
+        evidence_refs: Sequence[str],
+        sop_refs: Sequence[str],
         risk_category: str | None,
         source_refs: Sequence[SourceReferenceInput],
     ) -> IssueRecord:
@@ -91,6 +96,8 @@ class AuditWorkspaceService:
             observed_gap=observed_gap,
             title_hint=title_hint,
             evidence_summary=evidence_summary,
+            evidence_refs=evidence_refs,
+            sop_refs=sop_refs,
             risk_category=risk_category,
             confidence=None,
             validation_flags=(),
@@ -107,6 +114,8 @@ class AuditWorkspaceService:
         observed_gap: str,
         title_hint: str | None,
         evidence_summary: str | None,
+        evidence_refs: Sequence[str],
+        sop_refs: Sequence[str],
         risk_category: str | None,
         confidence: float | None,
         validation_flags: Sequence[str],
@@ -120,6 +129,8 @@ class AuditWorkspaceService:
             observed_gap=observed_gap,
             title_hint=title_hint,
             evidence_summary=evidence_summary,
+            evidence_refs=evidence_refs,
+            sop_refs=sop_refs,
             risk_category=risk_category,
             confidence=confidence,
             validation_flags=validation_flags,
@@ -154,6 +165,8 @@ class AuditWorkspaceService:
             observed_gap=current.observed_gap,
             title_hint=current.title_hint,
             evidence_summary=current.evidence_summary,
+            evidence_refs=current.evidence_refs,
+            sop_refs=current.sop_refs,
             risk_category=current.risk_category,
             confidence=current.confidence,
             validation_flags=current.validation_flags,
@@ -176,8 +189,10 @@ class AuditWorkspaceService:
     def list_job_events(self, job_id: str, after_event_id: int = 0) -> list[JobEventRecord]:
         return self._repository.list_job_events(job_id, after_event_id=after_event_id)
 
-    def retry_job(self, job_id: str) -> JobRecord:
-        return self._repository.retry_job(job_id)
+    def retry_job(
+        self, job_id: str, *, reason: str | None = None
+    ) -> JobRecord:
+        return self._repository.retry_job(job_id, reason=reason)
 
     def list_outputs(self, version_id: str) -> list[OutputRevisionRecord]:
         return self._repository.list_output_revisions(version_id)

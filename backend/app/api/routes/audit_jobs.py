@@ -3,18 +3,31 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Annotated, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from fastapi.responses import StreamingResponse
 
 from app.api.audit_errors import audit_api_errors
-from app.api.dependencies import get_audit_workspace_service
-from app.api.schemas.audit_jobs import JobEventResponse, JobResponse
+from app.api.dependencies import (
+    get_audit_workspace_service,
+    get_discovery_service,
+)
+from app.api.schemas.audit_jobs import (
+    JobEventResponse,
+    JobResponse,
+    RetryJobRequest,
+)
 from app.application.audit_workspace_service import AuditWorkspaceService
+from app.application.discovery_service import DiscoveryService
+from app.domain.audit import JobType
 
 router = APIRouter(prefix="/jobs", tags=["audit-jobs"])
 AuditServiceDependency = Annotated[AuditWorkspaceService, Depends(get_audit_workspace_service)]
+DiscoveryServiceDependency = Annotated[
+    DiscoveryService, Depends(get_discovery_service)
+]
 
 
 @router.get("/{job_id}", response_model=JobResponse)
@@ -51,10 +64,30 @@ def stream_job_events(
     )
 
 
-@router.post("/{job_id}/retry", response_model=JobResponse)
-def retry_job(job_id: str, service: AuditServiceDependency) -> JobResponse:
+@router.post(
+    "/{job_id}/retry",
+    response_model=JobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def retry_job(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    service: AuditServiceDependency,
+    discovery: DiscoveryServiceDependency,
+    request: RetryJobRequest | None = None,
+) -> JobResponse:
+    reason = request.reason if request else None
     with audit_api_errors():
-        return JobResponse.from_domain(service.retry_job(job_id))
+        current = service.get_job(job_id)
+        if current.job_type == JobType.DISCOVERY:
+            started = discovery.retry_discovery(job_id, reason=reason)
+            background_tasks.add_task(
+                discovery.run_discovery, started.job.job_id
+            )
+            return JobResponse.from_domain(started.job)
+        return JobResponse.from_domain(
+            service.retry_job(job_id, reason=reason)
+        )
 
 
 async def _event_stream(

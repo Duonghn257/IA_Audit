@@ -112,6 +112,28 @@ class SourceReferenceRecord:
 
 
 @dataclass(frozen=True)
+class SourceDocumentRecord:
+    document_id: str
+    snapshot_id: str
+    relative_path: str
+    logical_role: LogicalRole
+    original_object_key: str
+    content_hash: str
+    size_bytes: int
+    content_type: str | None
+
+
+@dataclass(frozen=True)
+class CandidateIssueInput:
+    title_hint: str
+    observed_gap: str
+    evidence_summary: str
+    evidence_refs: tuple[str, ...]
+    sop_refs: tuple[str, ...]
+    risk_category: str
+
+
+@dataclass(frozen=True)
 class IssueRecord:
     issue_id: str
     project_version_id: str
@@ -126,6 +148,8 @@ class IssueRecord:
     row_version: int
     created_at: datetime
     updated_at: datetime
+    evidence_refs: tuple[str, ...] = ()
+    sop_refs: tuple[str, ...] = ()
     source_refs: tuple[SourceReferenceRecord, ...] = ()
 
 

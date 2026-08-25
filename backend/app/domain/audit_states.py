@@ -44,6 +44,14 @@ class ActiveJobConflictError(RuntimeError):
     """Raised when an equivalent active job already exists."""
 
 
+class JobNotRetryableError(RuntimeError):
+    """Raised when a job is not in a retryable terminal state."""
+
+
+class SourceNotReadyError(ValueError):
+    """Raised when immutable source cannot satisfy discovery input."""
+
+
 class UploadSessionState(StrEnum):
     UPLOADING = "UPLOADING"
     VALIDATING = "VALIDATING"

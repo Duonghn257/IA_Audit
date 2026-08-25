@@ -1,20 +1,20 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import select
-
+from app.application.audit_workspace_service import AuditWorkspaceService
 from app.domain.audit import (
     ActiveJobConflictError,
     AuditVersionState,
     DuplicateProjectNameError,
     IssueOrigin,
     IssueStatus,
+    JobNotRetryableError,
     JobState,
     JobType,
     LogicalRole,
     OutputStatus,
-    SourceRefKind,
     SourceReferenceInput,
+    SourceRefKind,
     UploadFileInput,
     UploadFileValidation,
     VersionConflictError,
@@ -24,7 +24,7 @@ from app.infrastructure.audit_repository import (
     SqlAlchemyAuditRepository,
 )
 from app.infrastructure.database import Database
-from app.application.audit_workspace_service import AuditWorkspaceService
+from sqlalchemy import select
 
 
 def _create_project(repository: SqlAlchemyAuditRepository) -> tuple[str, str]:
@@ -267,5 +267,6 @@ def test_jobs_are_idempotent_and_persist_events(tmp_path) -> None:
     assert repository.list_versions(project_id)[0].state == AuditVersionState.CANDIDATES_READY
     assert repository.get_job(job.job_id).state == JobState.SUCCEEDED
     assert repository.list_jobs_for_version(version_id)[0].job_id == job.job_id
-    assert repository.retry_job(job.job_id).state == JobState.QUEUED
+    with pytest.raises(JobNotRetryableError):
+        repository.retry_job(job.job_id)
     database.dispose()

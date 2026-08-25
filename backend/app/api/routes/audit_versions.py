@@ -3,10 +3,13 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 
 from app.api.audit_errors import audit_api_errors, feature_unavailable
-from app.api.dependencies import get_audit_workspace_service
+from app.api.dependencies import (
+    get_audit_workspace_service,
+    get_discovery_service,
+)
 from app.api.schemas.audit_issues import (
     CreateManualIssueRequest,
     IssueDispositionRequest,
@@ -21,9 +24,13 @@ from app.api.schemas.audit_jobs import (
 )
 from app.api.schemas.audit_versions import CreateVersionRequest, ProjectVersionResponse
 from app.application.audit_workspace_service import AuditWorkspaceService
+from app.application.discovery_service import DiscoveryService
 
 router = APIRouter(prefix="/projects/{project_id}/versions", tags=["audit-workspace"])
 AuditServiceDependency = Annotated[AuditWorkspaceService, Depends(get_audit_workspace_service)]
+DiscoveryServiceDependency = Annotated[
+    DiscoveryService, Depends(get_discovery_service)
+]
 
 
 @router.get("", response_model=list[ProjectVersionResponse])
@@ -89,6 +96,8 @@ def create_issue(
             observed_gap=request.observed_gap,
             title_hint=request.title_hint,
             evidence_summary=request.evidence_summary,
+            evidence_refs=request.evidence_refs,
+            sop_refs=request.sop_refs,
             risk_category=request.risk_category,
             source_refs=[item.to_domain() for item in request.source_refs],
         )
@@ -125,6 +134,8 @@ def update_issue(
             observed_gap=request.observed_gap,
             title_hint=request.title_hint,
             evidence_summary=request.evidence_summary,
+            evidence_refs=request.evidence_refs,
+            sop_refs=request.sop_refs,
             risk_category=request.risk_category,
             confidence=request.confidence,
             validation_flags=request.validation_flags,
@@ -156,21 +167,29 @@ def set_issue_disposition(
     "/{version_id}/discovery-jobs",
     response_model=JobResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    responses={501: {"description": "AI discovery worker is not implemented"}},
 )
 def start_discovery(
     project_id: str,
     version_id: str,
     request: StartDiscoveryRequest,
+    background_tasks: BackgroundTasks,
+    http_request: Request,
     service: AuditServiceDependency,
+    discovery: DiscoveryServiceDependency,
 ) -> JobResponse:
-    del request
     with audit_api_errors():
         service.get_version(project_id, version_id)
-    raise feature_unavailable(
-        "AI_PIPELINE_NOT_IMPLEMENTED",
-        "AI issue discovery is part of the contract but is not implemented in the MVP yet.",
-    )
+        started = discovery.start_discovery(
+            project_id,
+            version_id,
+            force=request.force,
+            correlation_id=http_request.state.correlation_id,
+        )
+        if started.scheduled:
+            background_tasks.add_task(
+                discovery.run_discovery, started.job.job_id
+            )
+        return JobResponse.from_domain(started.job)
 
 
 @router.post(

@@ -13,6 +13,8 @@ class CreateManualIssueRequest(BaseModel):
     observed_gap: str = Field(min_length=1)
     title_hint: str | None = None
     evidence_summary: str | None = None
+    evidence_refs: list[str] = Field(default_factory=list)
+    sop_refs: list[str] = Field(default_factory=list)
     risk_category: str | None = None
     status: IssueStatus = IssueStatus.DRAFT
     source_refs: list[SourceReferenceRequest] = Field(default_factory=list)
@@ -37,6 +39,8 @@ class IssueResponse(BaseModel):
     observed_gap: str
     title_hint: str | None
     evidence_summary: str | None
+    evidence_refs: list[str]
+    sop_refs: list[str]
     risk_category: str | None
     confidence: float | None
     validation_flags: list[str]
@@ -46,7 +50,7 @@ class IssueResponse(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def from_domain(cls, value: IssueRecord) -> "IssueResponse":
+    def from_domain(cls, value: IssueRecord) -> IssueResponse:
         return cls(
             issue_id=value.issue_id,
             project_version_id=value.project_version_id,
@@ -55,6 +59,8 @@ class IssueResponse(BaseModel):
             observed_gap=value.observed_gap,
             title_hint=value.title_hint,
             evidence_summary=value.evidence_summary,
+            evidence_refs=list(value.evidence_refs),
+            sop_refs=list(value.sop_refs),
             risk_category=value.risk_category,
             confidence=value.confidence,
             validation_flags=value.validation_flags,

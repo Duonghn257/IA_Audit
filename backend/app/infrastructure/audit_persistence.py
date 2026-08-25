@@ -247,20 +247,22 @@ def to_issue_record(model: IssueModel) -> IssueRecord:
         for reference in model.source_refs
     )
     return IssueRecord(
-        model.issue_id,
-        model.project_version_id,
-        IssueOrigin(model.origin),
-        IssueStatus(model.status),
-        model.observed_gap,
-        model.title_hint,
-        model.evidence_summary,
-        model.risk_category,
-        model.confidence,
-        list(model.validation_flags),
-        model.row_version,
-        as_utc(model.created_at),
-        as_utc(model.updated_at),
-        source_refs,
+        issue_id=model.issue_id,
+        project_version_id=model.project_version_id,
+        origin=IssueOrigin(model.origin),
+        status=IssueStatus(model.status),
+        observed_gap=model.observed_gap,
+        title_hint=model.title_hint,
+        evidence_summary=model.evidence_summary,
+        risk_category=model.risk_category,
+        confidence=model.confidence,
+        validation_flags=list(model.validation_flags),
+        row_version=model.row_version,
+        created_at=as_utc(model.created_at),
+        updated_at=as_utc(model.updated_at),
+        evidence_refs=tuple(model.evidence_refs or ()),
+        sop_refs=tuple(model.sop_refs or ()),
+        source_refs=source_refs,
     )
 
 

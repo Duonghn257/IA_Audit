@@ -2,10 +2,8 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect
-
 from app.core.settings import load_api_settings
-
+from sqlalchemy import create_engine, inspect
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
@@ -64,6 +62,10 @@ def test_migrations_create_uat_workspace_schema(tmp_path, monkeypatch) -> None:
     assert schema.get_foreign_keys("issues")[0][
         "referred_table"
     ] == "project_versions"
+    issue_columns = {
+        column["name"] for column in schema.get_columns("issues")
+    }
+    assert {"evidence_refs", "sop_refs"} <= issue_columns
     engine.dispose()
 
     command.check(config)

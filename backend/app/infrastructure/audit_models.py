@@ -4,7 +4,17 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infrastructure.database import Base
@@ -21,7 +31,7 @@ class UploadSessionModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    files: Mapped[list["UploadFileModel"]] = relationship(back_populates="session", cascade="all, delete-orphan")
+    files: Mapped[list[UploadFileModel]] = relationship(back_populates="session", cascade="all, delete-orphan")
 
 
 class UploadFileModel(Base):
@@ -51,7 +61,7 @@ class SourceSnapshotModel(Base):
     manifest: Mapped[dict[str, Any]] = mapped_column(JSON)
     source_object_prefix: Mapped[str] = mapped_column(Text)
     promoted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    documents: Mapped[list["SourceDocumentModel"]] = relationship(back_populates="snapshot", cascade="all, delete-orphan")
+    documents: Mapped[list[SourceDocumentModel]] = relationship(back_populates="snapshot", cascade="all, delete-orphan")
 
 
 class SourceDocumentModel(Base):
@@ -84,7 +94,7 @@ class ProjectVersionModel(Base):
     issue_revision: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    issues: Mapped[list["IssueModel"]] = relationship(back_populates="version", cascade="all, delete-orphan", foreign_keys="IssueModel.project_version_id")
+    issues: Mapped[list[IssueModel]] = relationship(back_populates="version", cascade="all, delete-orphan", foreign_keys="IssueModel.project_version_id")
 
 
 class IssueModel(Base):
@@ -96,6 +106,8 @@ class IssueModel(Base):
     title_hint: Mapped[str | None] = mapped_column(String(500))
     observed_gap: Mapped[str] = mapped_column(Text)
     evidence_summary: Mapped[str | None] = mapped_column(Text)
+    evidence_refs: Mapped[list[str]] = mapped_column(JSON, default=list)
+    sop_refs: Mapped[list[str]] = mapped_column(JSON, default=list)
     risk_category: Mapped[str | None] = mapped_column(String(128))
     confidence: Mapped[float | None] = mapped_column(Float)
     validation_flags: Mapped[list[str]] = mapped_column(JSON, default=list)
@@ -103,7 +115,7 @@ class IssueModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     version: Mapped[ProjectVersionModel] = relationship(back_populates="issues")
-    source_refs: Mapped[list["IssueSourceRefModel"]] = relationship(back_populates="issue", cascade="all, delete-orphan")
+    source_refs: Mapped[list[IssueSourceRefModel]] = relationship(back_populates="issue", cascade="all, delete-orphan")
 
 
 class IssueSourceRefModel(Base):
@@ -140,7 +152,7 @@ class JobModel(Base):
     input_snapshot_id: Mapped[str | None] = mapped_column(ForeignKey("audit_input_snapshots.snapshot_id"), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    events: Mapped[list["JobEventModel"]] = relationship(back_populates="job", cascade="all, delete-orphan")
+    events: Mapped[list[JobEventModel]] = relationship(back_populates="job", cascade="all, delete-orphan")
 
 
 class JobEventModel(Base):
