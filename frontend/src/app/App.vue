@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import ProjectsWorkspace from "../modules/projects/ProjectsWorkspace.vue"
+import ProjectsWorkspaceV2 from "../modules/projects/ProjectsWorkspaceV2.vue"
 </script>
 
 <template>
-  <ProjectsWorkspace />
+  <ProjectsWorkspaceV2 />
 </template>
