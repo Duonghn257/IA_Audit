@@ -302,6 +302,16 @@ def test_upload_manifest_ignores_unsupported_files(tmp_path: Path) -> None:
                         "size_bytes": 162,
                         "content_type": _CONTENT_TYPE,
                     },
+                    {
+                        "relative_path": "audit-project/Guidelines/style.docx",
+                        "size_bytes": len(supported),
+                        "content_type": _CONTENT_TYPE,
+                    },
+                    {
+                        "relative_path": "audit-project/Samples/history.pdf",
+                        "size_bytes": 12,
+                        "content_type": "application/pdf",
+                    },
                 ]
             },
         )

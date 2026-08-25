@@ -90,19 +90,24 @@
           file.name.toLowerCase().endsWith(ext)
         );
 
-      state.ignoredFiles = selected.filter(file => !isSupported(file));
       const candidates = selected.filter(isSupported);
-      const invalid = candidates.filter(file => {
+      const auditFolderOf = file => {
         const parts = pathOf(file).split('/');
-        return parts[0] !== root || !requiredFolders.includes(parts[1]);
-      });
-      state.files = candidates.filter(file => !invalid.includes(file));
+        if (parts[0] !== root) return null;
+        return parts[1] || null;
+      };
+      state.files = candidates.filter(file =>
+        requiredFolders.includes(auditFolderOf(file))
+      );
+      state.ignoredFiles = selected.filter(file =>
+        !state.files.includes(file)
+      );
 
       const counts = Object.fromEntries(
         requiredFolders.map(folder => [folder, 0])
       );
       state.files.forEach(file => {
-        counts[pathOf(file).split('/')[1]] += 1;
+        counts[auditFolderOf(file)] += 1;
       });
       const total = state.files.reduce((sum, file) => sum + file.size, 0);
 
@@ -128,20 +133,26 @@
           ? 'file was'
           : 'files were';
         $('ignoredNotice').textContent =
-          `${state.ignoredFiles.length} unsupported ${noun} ignored${names ? `: ${names}` : ''}.`;
+          `${state.ignoredFiles.length} unrelated or unsupported ${noun} ignored${names ? `: ${names}` : ''}.`;
         $('ignoredNotice').classList.remove('hidden');
       } else {
         $('ignoredNotice').classList.add('hidden');
       }
 
       const missing = requiredFolders.filter(folder => counts[folder] === 0);
+      const wrongNames = [...new Set(candidates
+        .map(auditFolderOf)
+        .filter(folder => folder && !requiredFolders.includes(folder))
+        .filter(folder => requiredFolders.some(
+          required => required.toLowerCase() === folder.toLowerCase()
+        )))];
       const errors = [];
-      if (!candidates.length) {
+      if (!state.files.length) {
         errors.push('No supported DOCX, PDF or XLSX files were found.');
       }
-      if (invalid.length) {
+      if (wrongNames.length) {
         errors.push(
-          `Folder names must match exactly: ${requiredFolders.join(', ')}.`
+          `Folder names must match exactly: ${wrongNames.join(', ')}.`
         );
       }
       if (missing.length) {

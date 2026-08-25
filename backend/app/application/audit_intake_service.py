@@ -482,7 +482,8 @@ class AuditIntakeService:
                 or filename.startswith(("~$", ".~"))
             ):
                 continue
-            _project_folder(path)
+            if _project_folder(path) is None:
+                continue
             if file.size_bytes <= 0:
                 raise ValueError(f"File {path} must not be empty.")
             if path in seen:
@@ -524,7 +525,7 @@ def _normalize_relative_path(raw_path: str) -> str:
     return path.as_posix()
 
 
-def _project_folder(relative_path: str) -> tuple[str, str | None]:
+def _project_folder(relative_path: str) -> tuple[str, str | None] | None:
     parts = PurePosixPath(relative_path).parts
     if len(parts) < 2:
         raise ValueError(
@@ -534,11 +535,17 @@ def _project_folder(relative_path: str) -> tuple[str, str | None]:
         return parts[0], None
     if len(parts) >= 3 and parts[1] in _REQUIRED_FOLDERS:
         return parts[1], parts[0]
-    invalid = parts[1] if len(parts) >= 3 else parts[0]
-    raise ValueError(
-        f"Invalid audit folder {invalid!r} in {relative_path}; expected AWP, "
-        "APM, Process SOP or Process Understanding."
-    )
+    candidate = parts[1] if len(parts) >= 3 else parts[0]
+    expected_by_casefold = {
+        folder.casefold(): folder for folder in _REQUIRED_FOLDERS
+    }
+    expected = expected_by_casefold.get(candidate.casefold())
+    if expected is not None:
+        raise ValueError(
+            f"Invalid audit folder {candidate!r} in {relative_path}; "
+            f"folder name must match {expected!r} exactly."
+        )
+    return None
 
 
 def _logical_role(relative_path: str) -> LogicalRole:
