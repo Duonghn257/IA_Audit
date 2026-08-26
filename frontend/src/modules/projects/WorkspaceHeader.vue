@@ -7,12 +7,14 @@ const props = withDefaults(defineProps<{
   environment?: string
   runningJobs?: number
   primaryLabel?: string
+  showPrimary?: boolean
   user: AuthUser
   loggingOut?: boolean
 }>(), {
   environment: "UAT environment",
   runningJobs: 0,
   primaryLabel: "New project",
+  showPrimary: true,
   loggingOut: false,
 })
 
@@ -53,7 +55,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", closeOnEscape))
     <div class="uat-topbar-actions">
       <span v-if="runningJobs" class="uat-environment"><i />{{ runningJobs }} job running</span>
       <span v-else class="uat-environment"><i />{{ environment }}</span>
-      <button class="uat-button uat-button-primary" type="button" @click="$emit('primary')">
+      <button v-if="showPrimary" class="uat-button uat-button-primary" type="button" @click="$emit('primary')">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
         {{ primaryLabel }}
       </button>
