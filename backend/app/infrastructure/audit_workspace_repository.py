@@ -14,11 +14,17 @@ from app.domain.audit import (
     IssueOrigin,
     IssueRecord,
     IssueStatus,
+    LogicalRole,
     ProjectVersionRecord,
+    SourceDocumentRecord,
     SourceReferenceInput,
     VersionConflictError,
 )
-from app.infrastructure.audit_models import IssueModel, ProjectVersionModel
+from app.infrastructure.audit_models import (
+    IssueModel,
+    ProjectVersionModel,
+    SourceDocumentModel,
+)
 from app.infrastructure.audit_persistence import (
     get_issue,
     get_project,
@@ -52,6 +58,35 @@ class SqlAlchemyAuditWorkspaceRepository:
                 ProjectVersionModel.project_id == project_id
             ).order_by(ProjectVersionModel.sequence_no)).all()
             return [to_version_record(version) for version in versions]
+
+    def list_source_documents(
+        self, project_id: str
+    ) -> list[SourceDocumentRecord]:
+        with self._sessions() as session:
+            snapshot = get_snapshot(session, project_id)
+            documents = session.scalars(
+                select(SourceDocumentModel)
+                .where(SourceDocumentModel.snapshot_id == snapshot.snapshot_id)
+                .order_by(
+                    SourceDocumentModel.relative_path,
+                    SourceDocumentModel.document_id,
+                )
+            ).all()
+            return [
+                SourceDocumentRecord(
+                    document_id=document.document_id,
+                    snapshot_id=document.snapshot_id,
+                    relative_path=document.relative_path,
+                    logical_role=LogicalRole(document.logical_role),
+                    original_object_key=document.original_object_key,
+                    content_hash=document.content_hash,
+                    size_bytes=document.size_bytes,
+                    content_type=document.content_type,
+                    upload_status=document.upload_status,
+                    parse_status=document.parse_status,
+                )
+                for document in documents
+            ]
 
     def get_version(self, project_id: str, version_id: str) -> ProjectVersionRecord:
         with self._sessions() as session:

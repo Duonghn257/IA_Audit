@@ -123,6 +123,8 @@ class SourceDocumentRecord:
     content_hash: str
     size_bytes: int
     content_type: str | None
+    upload_status: str
+    parse_status: str
 
 
 @dataclass(frozen=True)

@@ -10,6 +10,7 @@ from app.api.dependencies import (
     require_owned_project,
 )
 from app.api.routes.audit_jobs import router as audit_jobs_router
+from app.api.routes.audit_sources import router as audit_sources_router
 from app.api.routes.audit_versions import router as audit_versions_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.health import router as health_router
@@ -23,6 +24,10 @@ _protected = [Depends(require_authenticated_user), Depends(require_csrf)]
 api_v1_router.include_router(projects_router, dependencies=_protected)
 api_v1_router.include_router(
     audit_versions_router,
+    dependencies=[*_protected, Depends(require_owned_project)],
+)
+api_v1_router.include_router(
+    audit_sources_router,
     dependencies=[*_protected, Depends(require_owned_project)],
 )
 api_v1_router.include_router(audit_jobs_router, dependencies=_protected)

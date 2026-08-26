@@ -277,9 +277,35 @@ def test_projects_versions_and_jobs_are_isolated_by_authenticated_user(
         assert listed.status_code == 200
         assert [item["project_id"] for item in listed.json()] == [first_project]
         assert client.get(f"/api/v1/projects/{first_project}").status_code == 200
+        source_response = client.get(
+            f"/api/v1/projects/{first_project}/source-documents"
+        )
+        assert source_response.status_code == 200
+        source_tree = source_response.json()
+        assert source_tree["snapshot_id"] == "snapshot-one"
+        assert source_tree["status"] == "FROZEN"
+        assert source_tree["folder_count"] == 1
+        assert source_tree["file_count"] == 1
+        assert source_tree["total_size_bytes"] == 10
+        assert source_tree["folders"][0]["name"] == "Process Understanding"
+        assert source_tree["folders"][0]["logical_role"] == "EVIDENCE"
+        assert source_tree["folders"][0]["file_count"] == 1
+        source_file = source_tree["folders"][0]["files"][0]
+        assert source_file["name"] == "evidence.docx"
+        assert (
+            source_file["relative_path"] == "Process Understanding/evidence.docx"
+        )
+        assert source_file["status"] == "READY"
+        assert source_file["parse_status"] == "PENDING"
         assert client.get(f"/api/v1/projects/{second_project}").status_code == 404
         assert (
             client.get(f"/api/v1/projects/{second_project}/versions").status_code == 404
+        )
+        assert (
+            client.get(
+                f"/api/v1/projects/{second_project}/source-documents"
+            ).status_code
+            == 404
         )
         assert client.get(f"/api/v1/jobs/{second_job}").status_code == 404
         cross_retry = client.post(

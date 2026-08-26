@@ -1,11 +1,11 @@
 # UAT API Contract — Operation Report Jedi
 
-> Contract version: `1.0.0-uat`
+> Contract version: `1.1.0-uat`
 > Base URL: `/api/v1`  
 > Content type mặc định: `application/json`
 > OpenAPI runtime: `/openapi.json`
 > Swagger UI: `/docs`  
-> Cập nhật: 21/08/2026
+> Cập nhật: 26/08/2026
 
 ## 1. Mục đích và phạm vi
 
@@ -164,6 +164,7 @@ Với cùng scope và `Idempotency-Key`:
 |---|---|---|---|---|
 | TARGET | `GET` | `/projects` | List/search project | `200 ProjectPage` |
 | TARGET | `GET` | `/projects/{project_id}` | Project detail và source/version summary | `200 ProjectDetail` |
+| READY | `GET` | `/projects/{project_id}/source-documents` | Cây immutable source theo folder/file | `200 SourceTree` |
 | READY | `GET` | `/projects/{project_id}/versions` | List audit version | `200 ProjectVersion[]` |
 | READY | `POST` | `/projects/{project_id}/versions` | Tạo `v0.N` từ base version | `201 ProjectVersion` |
 | READY | `GET` | `/projects/{project_id}/versions/{version_id}` | Workspace snapshot của version | `200 ProjectVersion` |
@@ -276,7 +277,46 @@ Validation message:
 Project states:
 `READY_FOR_DISCOVERY | CANDIDATES_AVAILABLE | OUTPUT_AVAILABLE`.
 
-### 4.3 ProjectVersion
+### 4.3 SourceTree
+
+```json
+{
+  "snapshot_id": "src_01J5...",
+  "status": "FROZEN",
+  "folder_count": 4,
+  "file_count": 8,
+  "total_size_bytes": 4823130,
+  "folders": [
+    {
+      "name": "AWP",
+      "logical_role": "SCOPE",
+      "file_count": 2,
+      "files": [
+        {
+          "document_id": "doc_01J5...",
+          "name": "Approved Work Programme.pdf",
+          "relative_path": "AWP/Approved Work Programme.pdf",
+          "logical_role": "SCOPE",
+          "size_bytes": 152340,
+          "content_type": "application/pdf",
+          "status": "READY",
+          "parse_status": "PENDING"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Folder được nhóm theo logical role và sắp theo thứ tự SCOPE (AWP),
+RISK_CONTEXT (APM), EVIDENCE (Process Understanding), rồi CRITERIA
+(Process SOP). Chỉ folder thực sự có document được trả về. File trong mỗi
+folder được sắp theo relative path.
+
+`status = READY` nghĩa là file đã qua validation và nằm trong immutable
+snapshot; `parse_status` phản ánh trạng thái artefact dẫn xuất của discovery.
+
+### 4.4 ProjectVersion
 
 ```json
 {
@@ -285,22 +325,20 @@ Project states:
   "sequence_no": 2,
   "label": "v0.2",
   "base_version_id": "ver_01J4...",
-  "state": "STALE_OUTPUT",
-  "issue_revision": 12,
-  "issue_counts": {
-    "DRAFT": 1,
-    "APPROVED": 3,
-    "NEEDS_EVIDENCE": 1
-  },
+  "state": "DRAFT",
+  "issue_revision": 0,
+  "created_by_user_id": "usr_01J5...",
+  "created_by_name": "UAT Auditor",
+  "issue_counts": {},
   "latest_job": null,
-  "output_available": true,
+  "output_available": false,
+  "output_status": null,
   "allowed_actions": [
     "CREATE_VERSION",
     "VIEW_ISSUES",
     "EDIT_ISSUES",
     "RUN_DISCOVERY",
-    "RUN_AUDIT",
-    "DOWNLOAD_OUTPUT"
+    "RUN_AUDIT"
   ],
   "created_at": "2026-08-21T09:00:00Z",
   "updated_at": "2026-08-21T09:30:00Z"
@@ -310,10 +348,13 @@ Project states:
 Version states:
 `DRAFT | CANDIDATES_READY | AUDITING | DOCX_READY | STALE_OUTPUT`.
 
-Tạo version copy issue và source references từ base version nhưng không copy
-DOCX. Sequence được cấp ở cấp project: `v0.1`, `v0.2`, ...
+Version mới dùng chung immutable source snapshot của project và lưu
+`base_version_id` để truy vết, nhưng không copy candidate issues, source
+references, jobs hoặc outputs từ base version. Version luôn bắt đầu ở
+`DRAFT`, `issue_revision = 0` và `issue_counts = {}`. Sequence được cấp ở
+cấp project: `v0.1`, `v0.2`, ...
 
-### 4.4 Issue và SourceReference
+### 4.5 Issue và SourceReference
 
 ```json
 {
@@ -367,7 +408,7 @@ DOCX. Sequence được cấp ở cấp project: `v0.1`, `v0.2`, ...
 | `location` | Object theo loại file: page/section hoặc sheet/range |
 | `quote` | Optional short excerpt; không thay thế document provenance |
 
-### 4.5 Job và JobEvent
+### 4.6 Job và JobEvent
 
 ```json
 {
@@ -406,7 +447,7 @@ Job state: `QUEUED | RUNNING | SUCCEEDED | INCOMPLETE | FAILED`.
 }
 ```
 
-### 4.6 OutputRevision
+### 4.7 OutputRevision
 
 ```json
 {
@@ -623,7 +664,21 @@ full source tree), kèm `page`.
 
 **Lỗi chính:** `404 PROJECT_NOT_FOUND`.
 
-### 7.3 GET `/projects/{project_id}/versions`
+### 7.3 GET `/projects/{project_id}/source-documents`
+
+**Mục đích:** tải immutable source tree cho tab **Source & discovery**, gồm
+folder, file, logical role và trạng thái xử lý.
+
+**Input:** path `project_id`.
+
+**Output — `200 SourceTree`:** folder theo thứ tự role nghiệp vụ; file trong
+mỗi folder sort theo `relative_path`. Response không trả object key hoặc
+content hash nội bộ.
+
+**Lỗi chính:** `404 PROJECT_NOT_FOUND`. Project của user khác cũng trả
+`PROJECT_NOT_FOUND` để tránh cross-project disclosure.
+
+### 7.4 GET `/projects/{project_id}/versions`
 
 **Mục đích:** hiển thị version history và cho người dùng quay lại version cũ.
 
@@ -633,11 +688,12 @@ full source tree), kèm `page`.
 
 **Lỗi chính:** `404 PROJECT_NOT_FOUND`.
 
-### 7.4 POST `/projects/{project_id}/versions`
+### 7.5 POST `/projects/{project_id}/versions`
 
 **Mục đích:** xử lý nút **+ New audit**; tạo next `v0.N` từ base đang chọn.
 
-**Headers:** `Idempotency-Key` required.
+**Headers:** `Idempotency-Key` required theo target contract; runtime chưa
+enforce header này (xem mục 12).
 
 **Input:**
 
@@ -647,12 +703,43 @@ full source tree), kèm `page`.
 }
 ```
 
-**Output — `201 ProjectVersion`.**
+**Output — `201 ProjectVersion`:**
+
+```json
+{
+  "version_id": "ver_01J5...",
+  "project_id": "prj_01J5...",
+  "sequence_no": 2,
+  "label": "v0.2",
+  "base_version_id": "ver_01J4...",
+  "state": "DRAFT",
+  "issue_revision": 0,
+  "created_by_user_id": "usr_01J5...",
+  "created_by_name": "UAT Auditor",
+  "issue_counts": {},
+  "latest_job": null,
+  "output_available": false,
+  "output_status": null,
+  "allowed_actions": [
+    "CREATE_VERSION",
+    "VIEW_ISSUES",
+    "EDIT_ISSUES",
+    "RUN_DISCOVERY",
+    "RUN_AUDIT"
+  ],
+  "created_at": "2026-08-26T09:00:00Z",
+  "updated_at": "2026-08-26T09:00:00Z"
+}
+```
+
+Version mới chỉ kế thừa immutable source snapshot và lưu liên kết
+`base_version_id`. Candidate issues, source references, jobs và outputs đều
+rỗng; frontend không được hiển thị issue của base version trong workspace mới.
 
 **Lỗi chính:** `404 PROJECT_NOT_FOUND`, `404 VERSION_NOT_FOUND`,
 `409 IDEMPOTENCY_CONFLICT`, `422 INVALID_BASE_VERSION`.
 
-### 7.5 GET `/projects/{project_id}/versions/{version_id}`
+### 7.6 GET `/projects/{project_id}/versions/{version_id}`
 
 **Mục đích:** tải workspace state, issue revision, counts, latest job và allowed
 actions của một version.

@@ -93,6 +93,8 @@ class SqlAlchemyAuditJobRepository:
                     content_hash=document.content_hash,
                     size_bytes=document.size_bytes,
                     content_type=document.content_type,
+                    upload_status=document.upload_status,
+                    parse_status=document.parse_status,
                 )
                 for document in documents
             ]

@@ -3,10 +3,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import Protocol
 from uuid import uuid4
 
 from app.domain.audit import (
+    AuditProjectRecord,
     IssueOrigin,
     IssueRecord,
     IssueStatus,
@@ -15,11 +17,16 @@ from app.domain.audit import (
     OutputRevisionRecord,
     OutputStatus,
     ProjectVersionRecord,
+    SourceDocumentRecord,
     SourceReferenceInput,
 )
 
 
 class AuditWorkspaceRepository(Protocol):
+    def get_project(self, project_id: str) -> AuditProjectRecord: ...
+    def list_source_documents(
+        self, project_id: str
+    ) -> list[SourceDocumentRecord]: ...
     def list_versions(self, project_id: str) -> list[ProjectVersionRecord]: ...
     def get_version(
         self, project_id: str, version_id: str
@@ -55,12 +62,56 @@ class VersionWorkspace:
     output_status: OutputStatus | None
 
 
+@dataclass(frozen=True)
+class SourceFolder:
+    name: str
+    logical_role: str
+    files: tuple[SourceDocumentRecord, ...]
+
+
+@dataclass(frozen=True)
+class SourceTree:
+    snapshot_id: str
+    folders: tuple[SourceFolder, ...]
+
+
+_SOURCE_FOLDER_NAMES = {
+    "SCOPE": "AWP",
+    "RISK_CONTEXT": "APM",
+    "EVIDENCE": "Process Understanding",
+    "CRITERIA": "Process SOP",
+}
+_SOURCE_ROLE_ORDER = tuple(_SOURCE_FOLDER_NAMES)
+
+
 class AuditWorkspaceService:
     def __init__(self, repository: AuditWorkspaceRepository) -> None:
         self._repository = repository
 
     def list_versions(self, project_id: str) -> list[VersionWorkspace]:
         return [self._workspace(version) for version in self._repository.list_versions(project_id)]
+
+    def get_source_tree(self, project_id: str) -> SourceTree:
+        project = self._repository.get_project(project_id)
+        documents = self._repository.list_source_documents(project_id)
+        grouped: dict[str, list[SourceDocumentRecord]] = {}
+        for document in documents:
+            grouped.setdefault(document.logical_role.value, []).append(document)
+
+        ordered_roles = [role for role in _SOURCE_ROLE_ORDER if role in grouped]
+        ordered_roles.extend(sorted(set(grouped) - set(ordered_roles)))
+        folders = tuple(
+            SourceFolder(
+                name=_SOURCE_FOLDER_NAMES.get(
+                    role,
+                    PurePosixPath(grouped[role][0].relative_path).parent.name,
+                ),
+                logical_role=role,
+                files=tuple(grouped[role]),
+            )
+            for role in ordered_roles
+        )
+        return SourceTree(snapshot_id=project.source_snapshot_id, folders=folders)
 
     def get_version(self, project_id: str, version_id: str) -> VersionWorkspace:
         return self._workspace(self._repository.get_version(project_id, version_id))
