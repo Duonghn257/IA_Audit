@@ -11,6 +11,7 @@ import type {
   UploadProjectInput,
 } from "../types/projects"
 import { serialiseAuditorIssues } from "../auditor-inputs"
+import { getCsrfToken, notifySessionExpired } from "../auth/auth-api"
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "")
 const API_ROOT = `${API_BASE_URL}/api/v1`
@@ -30,15 +31,25 @@ export class ApiClientError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(apiUrl(path), {
+  const resolvedUrl = apiUrl(path)
+  const method = (init?.method || "GET").toUpperCase()
+  const headers = new Headers(init?.headers)
+  const backendRequest = isBackendApiUrl(resolvedUrl)
+
+  if (!headers.has("Accept")) headers.set("Accept", "application/json")
+  if (backendRequest && !["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const token = getCsrfToken()
+    if (token) headers.set("X-CSRF-Token", token)
+  }
+
+  const response = await fetch(resolvedUrl, {
     ...init,
-    headers: {
-      Accept: "application/json",
-      ...init?.headers,
-    },
+    credentials: backendRequest ? "include" : init?.credentials,
+    headers,
   })
 
   if (!response.ok) {
+    if (response.status === 401) notifySessionExpired()
     let payload: ApiErrorBody = {}
     try {
       payload = (await response.json()) as ApiErrorBody
@@ -53,6 +64,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return (await response.json()) as T
+}
+
+function isBackendApiUrl(url: string): boolean {
+  const target = new URL(url, window.location.origin)
+  const apiRoot = new URL(API_ROOT, window.location.origin)
+  return target.origin === apiRoot.origin && target.pathname.startsWith("/api/")
 }
 
 export function apiUrl(path: string): string {
@@ -112,11 +129,15 @@ export function uploadProject(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open("POST", apiUrl("/projects/upload"))
+    xhr.withCredentials = true
     xhr.setRequestHeader("Accept", "application/json")
+    const csrfToken = getCsrfToken()
+    if (csrfToken) xhr.setRequestHeader("X-CSRF-Token", csrfToken)
     xhr.upload.addEventListener("progress", (event) => {
       if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100))
     })
     xhr.addEventListener("load", () => {
+      if (xhr.status === 401) notifySessionExpired()
       let payload: AuditProject | ApiErrorBody | null = null
       try {
         payload = JSON.parse(xhr.responseText) as AuditProject | ApiErrorBody
@@ -180,7 +201,7 @@ export async function uploadSessionFiles(
       body: file,
     })
     uploadedFiles += 1
-    onProgress(Math.round((uploadedFiles / Math.max(files.length, 1)) * 100), uploadedFiles)
+    onProgress(Math.round((uploadedFiles / Math.max(session.files.length, 1)) * 100), uploadedFiles)
   }
 
   return getUploadSession(session.session_id)
@@ -212,9 +233,11 @@ export function promoteUploadSession(
 
 export async function discardUploadSession(sessionId: string): Promise<void> {
   const response = await fetch(apiUrl(`/upload-sessions/${encodeURIComponent(sessionId)}`), {
+    credentials: "include",
     method: "DELETE",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", "X-CSRF-Token": getCsrfToken() },
   })
+  if (response.status === 401) notifySessionExpired()
   if (!response.ok && response.status !== 404) {
     throw new ApiClientError(`Request failed with status ${response.status}`, {
       status: response.status,
@@ -265,10 +288,28 @@ export function startDiscoveryJob(projectId: string, versionId: string): Promise
     `/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/discovery-jobs`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": createIdempotencyKey("discovery"),
+      },
       body: JSON.stringify({ force: false }),
     },
   )
+}
+
+export function getJob(jobId: string): Promise<AuditJob> {
+  return request<AuditJob>(`/jobs/${encodeURIComponent(jobId)}`)
+}
+
+export function retryDiscoveryJob(jobId: string): Promise<AuditJob> {
+  return request<AuditJob>(`/jobs/${encodeURIComponent(jobId)}/retry`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": createIdempotencyKey("discovery-retry"),
+    },
+    body: JSON.stringify({ reason: "Retry requested from project workspace" }),
+  })
 }
 
 export function startAuditJob(
@@ -300,4 +341,11 @@ function isRootAuditorInput(file: File): boolean {
   if (file.name !== "sample_issues.json") return false
   const parts = (file.webkitRelativePath || file.name).split("/").filter(Boolean)
   return parts.length <= 2
+}
+
+function createIdempotencyKey(scope: string): string {
+  const id = typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return `${scope}-${id}`
 }
