@@ -5,6 +5,7 @@ defineProps<{
   state: DiscoveryUiState
   correlationId?: string | null
   error?: string | null
+  errorTitle?: string | null
 }>()
 
 defineEmits<{
@@ -31,19 +32,21 @@ const sourceGroups = [
     </article>
 
     <article v-else-if="state === 'running'" class="uat-discovery-progress">
-      <h2>Finding candidates</h2>
+      <header class="uat-discovery-progress-header">
+        <h2>Finding candidates</h2>
+        <div><span>Job continues if you leave this page.</span><i /><span>Correlation ID:&nbsp; {{ correlationId || "—" }}</span></div>
+      </header>
       <div class="uat-progress-steps">
         <div class="done"><b>✓</b><span><strong>Queued</strong><small>Completed</small></span></div><i />
         <div class="done"><b>✓</b><span><strong>Parsing</strong><small>Completed</small></span></div><i />
         <div class="active"><b>↻</b><span><strong>Discovering</strong><small>62%</small></span></div><i class="pending" />
         <div><b>4</b><span><strong>Validating</strong><small>Pending</small></span></div>
       </div>
-      <footer><span>Job continues if you leave this page.</span><i /><span>Correlation ID:&nbsp; {{ correlationId || "9b7f2c8a-3d21-4b9f-8f2e-2a1d7c9e5b66" }}</span></footer>
     </article>
 
     <article v-else-if="state === 'error'" class="uat-discovery-error">
       <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5m0 3h.01" /><path d="M12 3 2 21h20z" /></svg></span>
-      <div><h2>INCOMPLETE: one workbook sheet could not be parsed</h2><p>{{ error || "This may affect the accuracy of candidate discovery." }}</p><small v-if="correlationId">Correlation ID: {{ correlationId }}</small></div>
+      <div><h2>{{ errorTitle || "Discovery could not complete" }}</h2><p>{{ error || "This may affect the accuracy of candidate discovery." }}</p><small v-if="correlationId">Correlation ID: {{ correlationId }}</small></div>
       <button class="uat-button uat-button-secondary" type="button">View error</button>
       <button class="uat-button uat-button-primary" type="button" @click="$emit('retry')">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5" /><path d="M18.5 16a8 8 0 1 1 .5-9l1 5" /></svg>

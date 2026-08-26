@@ -1,4 +1,11 @@
-export type ProjectStatus = "UPLOADING" | "PROCESSING" | "COMPLETED" | "FAILED"
+export type ProjectStatus =
+  | "UPLOADING"
+  | "PROCESSING"
+  | "COMPLETED"
+  | "FAILED"
+  | "READY_FOR_DISCOVERY"
+  | "CANDIDATES_AVAILABLE"
+  | "OUTPUT_AVAILABLE"
 
 export type ProjectAction = "VIEW_STATUS" | "VIEW_PROGRESS" | "DOWNLOAD_OUTPUT"
 
@@ -88,9 +95,25 @@ export interface UploadSession {
   expires_at: string
   promoted_at: string | null
   files: UploadSessionFile[]
-  validation_report: Record<string, unknown> | null
+  validation_report: UploadValidationReport | null
   allowed_actions: string[]
   action_reasons: Record<string, string>
+}
+
+export interface UploadValidationMessage {
+  code: string
+  message: string
+  file_id: string | null
+  relative_path: string | null
+  blocking: boolean
+  details?: Record<string, unknown>
+}
+
+export interface UploadValidationReport {
+  valid: boolean
+  errors: UploadValidationMessage[]
+  warnings: UploadValidationMessage[]
+  role_summary: Record<Exclude<LogicalRole, "CONTEXT">, number>
 }
 
 export type AuditVersionState =

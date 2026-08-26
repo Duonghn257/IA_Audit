@@ -26,15 +26,31 @@ const progress = ref(0)
 const uploadedFiles = ref(0)
 const error = ref("")
 
-const totalBytes = computed(() => files.value.reduce((total, file) => total + file.size, 0))
+const MAX_UPLOAD_BYTES = 100_000_000
+const SUPPORTED_FILE = /\.(docx|pdf|xlsx)$/i
+const REQUIRED_FOLDER = /(^|\/)(AWP|APM|Process SOP|Process Understanding)(\/|$)/
+const CENTRAL_FOLDER = /(^|\/)(Guidelines|Samples|Output)(\/|$)|template/i
+
+function relativePath(file: File): string {
+  return file.webkitRelativePath || file.name
+}
+
+function isTemporaryFile(file: File): boolean {
+  return /(^|\/)(~\$|\.~)/.test(relativePath(file))
+}
+
+const uploadFiles = computed(() => files.value.filter((file) => SUPPORTED_FILE.test(file.name) && !isTemporaryFile(file) && REQUIRED_FOLDER.test(relativePath(file))))
+const ignoredFiles = computed(() => files.value.filter((file) => !uploadFiles.value.includes(file)))
+const centralAssetFiles = computed(() => files.value.filter((file) => CENTRAL_FOLDER.test(relativePath(file))))
+const totalBytes = computed(() => uploadFiles.value.reduce((total, file) => total + file.size, 0))
 const folderName = computed(() => files.value[0]?.webkitRelativePath.split("/").filter(Boolean)[0] || "Select a folder")
-const unsupportedFiles = computed(() => files.value.filter((file) => !/\.(docx|pdf|xlsx)$/i.test(file.name)))
-const precheckPassed = computed(() => files.value.length > 0 && files.value.length <= 20 && totalBytes.value <= 100 * 1024 * 1024 && !unsupportedFiles.value.length)
+const precheckPassed = computed(() => uploadFiles.value.length > 0 && uploadFiles.value.length <= 20 && totalBytes.value <= MAX_UPLOAD_BYTES)
 const canContinue = computed(() => precheckPassed.value && progress.value === 100 && Boolean(session.value) && !uploading.value)
 const canCreate = computed(() => Boolean(session.value?.allowed_actions.includes("CREATE_PROJECT")) && !creating.value)
-const centralDuplicates = computed(() => session.value?.files.some((file) => /(^|\/)(guidelines|samples|output)(\/|$)|template/i.test(file.relative_path)) || false)
-const blockingFiles = computed(() => session.value?.files.filter((file) => file.readability_status && !["READABLE", "READY"].includes(file.readability_status)).length || 0)
-const warningCount = computed(() => centralDuplicates.value ? 2 : 0)
+const centralDuplicates = computed(() => centralAssetFiles.value.length > 0)
+const validationReport = computed(() => session.value?.validation_report)
+const blockingFiles = computed(() => validationReport.value?.errors.length || 0)
+const warningCount = computed(() => (validationReport.value?.warnings.length || 0) + centralAssetFiles.value.length)
 const roleCoverage = [["SCOPE", "AWP (Scope of work)"], ["RISK_CONTEXT", "APM (Risk context)"], ["EVIDENCE", "Evidence (Process understanding)"], ["CRITERIA", "Criteria (Process SOP)"]] as const
 const roleGroups = computed(() => {
   const groups = new Map<string, UploadSessionFile[]>()
@@ -80,8 +96,8 @@ async function onFolderSelected(event: Event): Promise<void> {
   if (!precheckPassed.value) return
   uploading.value = true
   try {
-    const created = await createUploadSession(selected)
-    session.value = await uploadSessionFiles(created, selected, (percent, count) => {
+    const created = await createUploadSession(uploadFiles.value)
+    session.value = await uploadSessionFiles(created, uploadFiles.value, (percent, count) => {
       progress.value = percent
       uploadedFiles.value = count
     })
@@ -129,6 +145,10 @@ function close(): void {
 function roleLabel(role: LogicalRole | null): string {
   return role?.replaceAll("_", " ") || "CONTEXT"
 }
+
+function roleFound(role: Exclude<LogicalRole, "CONTEXT">): boolean {
+  return (validationReport.value?.role_summary[role] || 0) > 0
+}
 </script>
 
 <template>
@@ -146,9 +166,10 @@ function roleLabel(role: LogicalRole | null): string {
             <label class="uat-field-label" for="uat-project-name"><strong>Project name</strong><span>Defaulted from root folder</span></label>
             <input id="uat-project-name" v-model="projectName" class="uat-text-input" type="text" maxlength="255" />
             <input ref="folderInput" class="visually-hidden" type="file" webkitdirectory directory multiple @change="onFolderSelected" />
-            <button class="uat-folder-picker" type="button" @click="chooseFolder"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v11H3z" /></svg></span><strong>{{ folderName }}</strong><small>{{ files.length ? `${files.length} files • ${formatBytes(totalBytes)}` : "Choose the complete project folder" }}</small><u>{{ files.length ? "Choose a different folder" : "Select folder" }}</u></button>
-            <section class="uat-precheck"><h3>Browser pre-check</h3><div :class="{ fail: unsupportedFiles.length }"><i>{{ unsupportedFiles.length ? "!" : "✓" }}</i><span>Supported formats only:<br /><b>DOCX, PDF, XLSX</b></span></div><div :class="{ fail: files.length > 20 }"><i>{{ files.length > 20 ? "!" : "✓" }}</i><span>{{ files.length }} of 20 files</span></div><div :class="{ fail: totalBytes > 100 * 1024 * 1024 }"><i>{{ totalBytes > 100 * 1024 * 1024 ? "!" : "✓" }}</i><span>{{ formatBytes(totalBytes) }} of 100 MB</span></div></section>
-            <section v-if="files.length" class="uat-upload-progress"><div><strong>{{ uploading ? "Uploading to secure staging" : progress === 100 ? "Upload complete" : "Ready to upload" }}</strong><small>{{ uploadedFiles }} of {{ files.length }} files • {{ formatBytes(totalBytes * progress / 100) }}</small></div><b>{{ progress }}%</b><progress :value="progress" max="100" /></section>
+            <button class="uat-folder-picker" type="button" @click="chooseFolder"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v11H3z" /></svg></span><strong>{{ folderName }}</strong><small>{{ files.length ? `${uploadFiles.length} supported files • ${formatBytes(totalBytes)}` : "Choose the complete project folder" }}</small><u>{{ files.length ? "Choose a different folder" : "Select folder" }}</u></button>
+            <section class="uat-precheck"><h3>Browser pre-check</h3><div :class="{ fail: !uploadFiles.length }"><i>{{ uploadFiles.length ? "✓" : "!" }}</i><span>Supported audit files:<br /><b>DOCX, PDF, XLSX</b></span></div><div :class="{ fail: uploadFiles.length > 20 }"><i>{{ uploadFiles.length > 20 ? "!" : "✓" }}</i><span>{{ uploadFiles.length }} of 20 supported files</span></div><div :class="{ fail: totalBytes > MAX_UPLOAD_BYTES }"><i>{{ totalBytes > MAX_UPLOAD_BYTES ? "!" : "✓" }}</i><span>{{ formatBytes(totalBytes) }} of 100 MB</span></div></section>
+            <p v-if="ignoredFiles.length" class="uat-relative-note">ⓘ&nbsp;&nbsp; {{ ignoredFiles.length }} unsupported, temporary, or centrally managed file(s) will be ignored.</p>
+            <section v-if="uploadFiles.length" class="uat-upload-progress"><div><strong>{{ uploading ? "Uploading to secure staging" : progress === 100 ? "Upload complete" : "Ready to upload" }}</strong><small>{{ uploadedFiles }} of {{ uploadFiles.length }} files • {{ formatBytes(totalBytes * progress / 100) }}</small></div><b>{{ progress }}%</b><progress :value="progress" max="100" /></section>
             <p class="uat-relative-note">♢&nbsp;&nbsp; Only relative paths are sent. Your local absolute path is never stored.</p>
             <p v-if="error" class="uat-inline-error">{{ error }}</p>
           </div>
@@ -157,8 +178,8 @@ function roleLabel(role: LogicalRole | null): string {
 
         <template v-else>
           <div class="uat-validation-body">
-            <section class="uat-validation-tree"><header><strong>Source folder</strong><span>▱&nbsp; {{ folderName }}</span></header><div v-for="[folder, group] in roleGroups" :key="folder" class="uat-validation-group"><h3>⌄&nbsp;&nbsp; ▱&nbsp; {{ folder }} <small>{{ group.length }} files</small></h3><div v-for="file in group" :key="file.file_id"><span>▤&nbsp; {{ file.relative_path.split('/').at(-1) }}</span><b :class="file.logical_role?.toLowerCase()">{{ roleLabel(file.logical_role) }}</b><em>●&nbsp; Ready</em></div></div><footer>▤&nbsp;&nbsp; {{ files.length }} files&nbsp; • &nbsp;{{ roleGroups.length }} folders</footer></section>
-            <aside class="uat-validation-sidebar"><article class="uat-validation-summary"><h3>Validation summary</h3><div><span><strong class="green">{{ files.length }}</strong>files</span><span><strong class="green">{{ blockingFiles }}</strong>blocking errors</span><span><strong class="orange">{{ warningCount }}</strong>warnings</span></div></article><article class="uat-role-coverage"><h3>Role coverage</h3><p v-for="role in roleCoverage" :key="role[0]"><span>▤&nbsp; {{ role[1] }}</span><b>Found&nbsp; ✓</b></p></article><article v-if="centralDuplicates" class="uat-central-warning"><strong>△&nbsp; Central asset duplicates detected</strong><p>Uploaded Guidelines and template will not override centrally managed assets.</p><u>View affected files ↗</u></article><article class="uat-can-create"><strong>♢&nbsp; Project can be created</strong><p>All required roles are present and validation checks passed.</p></article><p class="uat-create-note">ⓘ&nbsp;&nbsp; Create project freezes the source and creates v0.1.<br />&nbsp;&nbsp;&nbsp;&nbsp; AI discovery will not start automatically.</p></aside>
+            <section class="uat-validation-tree"><header><strong>Source folder</strong><span>▱&nbsp; {{ folderName }}</span></header><div v-for="[folder, group] in roleGroups" :key="folder" class="uat-validation-group"><h3>⌄&nbsp;&nbsp; ▱&nbsp; {{ folder }} <small>{{ group.length }} files</small></h3><div v-for="file in group" :key="file.file_id"><span>▤&nbsp; {{ file.relative_path.split('/').at(-1) }}</span><b :class="file.logical_role?.toLowerCase()">{{ roleLabel(file.logical_role) }}</b><em>●&nbsp; {{ file.readability_status === "READABLE" ? "Ready" : file.readability_status }}</em></div></div><footer>▤&nbsp;&nbsp; {{ session?.files.length || 0 }} files&nbsp; • &nbsp;{{ roleGroups.length }} folders</footer></section>
+            <aside class="uat-validation-sidebar"><article class="uat-validation-summary"><h3>Validation summary</h3><div><span><strong class="green">{{ session?.files.length || 0 }}</strong>files</span><span><strong :class="blockingFiles ? 'orange' : 'green'">{{ blockingFiles }}</strong>blocking errors</span><span><strong class="orange">{{ warningCount }}</strong>warnings</span></div></article><article class="uat-role-coverage"><h3>Role coverage</h3><p v-for="role in roleCoverage" :key="role[0]"><span>▤&nbsp; {{ role[1] }}</span><b>{{ roleFound(role[0]) ? "Found ✓" : "Missing !" }}</b></p></article><article v-if="centralDuplicates" class="uat-central-warning"><strong>△&nbsp; Central asset duplicates detected</strong><p>{{ centralAssetFiles.length }} centrally managed file(s) were excluded and will not override central assets.</p></article><article v-if="canCreate" class="uat-can-create"><strong>♢&nbsp; Project can be created</strong><p>All required roles are present and validation checks passed.</p></article><article v-else class="uat-central-warning"><strong>!&nbsp; Project cannot be created</strong><p>{{ validationReport?.errors.map((item) => item.message).join(" ") || session?.action_reasons.CREATE_PROJECT }}</p></article><p class="uat-create-note">ⓘ&nbsp;&nbsp; Create project freezes the source and creates v0.1.<br />&nbsp;&nbsp;&nbsp;&nbsp; AI discovery will not start automatically.</p></aside>
           </div>
           <p v-if="error" class="uat-inline-error validation-error">{{ error }}</p>
           <footer class="uat-project-modal-footer validation-footer"><button class="uat-button uat-button-secondary" type="button" @click="step = 1">‹&nbsp; Back</button><span><i />{{ canCreate ? "Allowed by server validation" : session?.action_reasons.CREATE_PROJECT || "Create project is not allowed" }}</span><button class="uat-button uat-button-primary" type="button" :disabled="!canCreate" @click="createProject">{{ creating ? "Creating…" : "Create project" }} →</button></footer>

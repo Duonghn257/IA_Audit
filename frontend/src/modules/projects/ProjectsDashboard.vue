@@ -56,7 +56,6 @@ function stageLabel(project: AuditProject): string {
     </section>
 
     <section class="uat-project-table-card">
-      <h2>Projects</h2>
       <div class="uat-project-table" role="table" aria-label="Audit projects">
         <div class="uat-project-table-head" role="row">
           <span role="columnheader">Project</span>

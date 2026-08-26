@@ -225,6 +225,9 @@ function statusLabel(status: ProjectStatus): string {
     PROCESSING: "Processing",
     COMPLETED: "Completed",
     FAILED: "Failed",
+    READY_FOR_DISCOVERY: "Ready for discovery",
+    CANDIDATES_AVAILABLE: "Candidates available",
+    OUTPUT_AVAILABLE: "Output available",
   }[status]
 }
 
