@@ -73,6 +73,33 @@ export type UploadSessionState =
 
 export type LogicalRole = "SCOPE" | "RISK_CONTEXT" | "EVIDENCE" | "CRITERIA" | "CONTEXT"
 
+export interface SourceFile {
+  document_id: string
+  name: string
+  relative_path: string
+  logical_role: LogicalRole
+  size_bytes: number
+  content_type: string | null
+  status: string
+  parse_status: string
+}
+
+export interface SourceFolder {
+  name: string
+  logical_role: LogicalRole
+  file_count: number
+  files: SourceFile[]
+}
+
+export interface SourceTree {
+  snapshot_id: string
+  status: string
+  folder_count: number
+  file_count: number
+  total_size_bytes: number
+  folders: SourceFolder[]
+}
+
 export interface UploadSessionFile {
   file_id: string
   relative_path: string

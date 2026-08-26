@@ -5,6 +5,7 @@ import {
   apiUrl,
   createProjectVersion,
   getJob,
+  getProjectSourceTree,
   listProjectVersions,
   listVersionIssues,
   listVersionOutputs,
@@ -20,9 +21,11 @@ import type {
   IssueStatus,
   OutputRevision,
   ProjectVersion,
+  SourceTree,
 } from "../../shared/types/projects"
 import AuditConfirmationModal from "./AuditConfirmationModal.vue"
 import CandidateIssuesTab from "./CandidateIssuesTab.vue"
+import NewAuditVersionModal from "./NewAuditVersionModal.vue"
 import ProjectDetailHeader, { type ProjectTab } from "./ProjectDetailHeader.vue"
 import RunsOutputsTab from "./RunsOutputsTab.vue"
 import SourceDiscoveryTab, { type DiscoveryUiState } from "./SourceDiscoveryTab.vue"
@@ -36,22 +39,30 @@ const selectedVersionId = ref("")
 const issues = ref<CandidateIssue[]>([])
 const outputs = ref<OutputRevision[]>([])
 const jobs = ref<AuditJob[]>([])
+const sourceTree = ref<SourceTree | null>(null)
+const sourceLoading = ref(true)
+const sourceError = ref("")
 const discoveryState = ref<DiscoveryUiState>("idle")
 const discoveryError = ref("")
 const discoveryErrorTitle = ref("")
 const correlationId = ref<string | null>(null)
 const auditModalOpen = ref(false)
 const auditSubmitting = ref(false)
+const versionModalOpen = ref(false)
+const versionSubmitting = ref(false)
+const versionError = ref("")
 const activeDiscoveryJobId = ref<string | null>(null)
 let discoveryPollTimer: number | null = null
 
 const selectedVersion = computed(() => versions.value.find((version) => version.version_id === selectedVersionId.value) || versions.value[0]!)
 const approvedCount = computed(() => issues.value.filter((issue) => issue.status === "APPROVED").length)
+const nextVersionLabel = computed(() => `v0.${Math.max(...versions.value.map((item) => item.sequence_no), 0) + 1}`)
 
 onMounted(() => void loadWorkspace())
 onBeforeUnmount(clearDiscoveryPolling)
 
 async function loadWorkspace(): Promise<void> {
+  void loadSourceTree()
   try {
     versions.value = await listProjectVersions(props.project.project_id)
   } catch {
@@ -60,6 +71,21 @@ async function loadWorkspace(): Promise<void> {
   if (!versions.value.length) versions.value = [fallbackVersion()]
   selectedVersionId.value = versions.value[0]!.version_id
   await loadVersionData()
+}
+
+async function loadSourceTree(): Promise<void> {
+  sourceLoading.value = true
+  sourceError.value = ""
+  try {
+    sourceTree.value = await getProjectSourceTree(props.project.project_id)
+  } catch (error) {
+    sourceTree.value = null
+    sourceError.value = error instanceof Error
+      ? error.message
+      : "Could not load the immutable project source."
+  } finally {
+    sourceLoading.value = false
+  }
 }
 
 async function loadVersionData(): Promise<void> {
@@ -96,21 +122,39 @@ async function changeVersion(versionId: string): Promise<void> {
   await loadVersionData()
 }
 
-async function createNewAudit(): Promise<void> {
+function createNewAudit(): void {
   const base = selectedVersion.value
   if (!base) return
+  if (!base.allowed_actions.includes("CREATE_VERSION")) {
+    emit("error", "A new audit version cannot be created from the selected version.")
+    return
+  }
+  versionError.value = ""
+  versionModalOpen.value = true
+}
+
+async function confirmCreateVersion(baseVersionId: string): Promise<void> {
+  const base = versions.value.find((version) => version.version_id === baseVersionId)
+  if (!base || versionSubmitting.value) return
+  versionSubmitting.value = true
+  versionError.value = ""
   try {
     const created = await createProjectVersion(props.project.project_id, base.version_id)
-    versions.value = [...versions.value, created]
+    versions.value = [created, ...versions.value.filter((item) => item.version_id !== created.version_id)]
     selectedVersionId.value = created.version_id
-  } catch {
-    const sequence = Math.max(...versions.value.map((item) => item.sequence_no), 0) + 1
-    const created = { ...base, version_id: `local-v${sequence}`, sequence_no: sequence, label: `v0.${sequence}`, base_version_id: base.version_id, state: "DRAFT" as const, output_available: false, latest_job: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
-    versions.value = [...versions.value, created]
-    selectedVersionId.value = created.version_id
+    issues.value = []
+    outputs.value = []
+    jobs.value = []
+    discoveryState.value = "idle"
+    correlationId.value = null
+    activeDiscoveryJobId.value = null
+    versionModalOpen.value = false
+    activeTab.value = "source"
+  } catch (error) {
+    versionError.value = error instanceof Error ? error.message : "Could not create the new audit version."
+  } finally {
+    versionSubmitting.value = false
   }
-  activeTab.value = "source"
-  await loadVersionData()
 }
 
 async function findCandidates(): Promise<void> {
@@ -243,11 +287,12 @@ defineExpose({ createNewAudit })
 
 <template>
   <main class="uat-project-detail">
-    <ProjectDetailHeader v-if="selectedVersion" :project="project" :versions="versions" :selected-version="selectedVersion" :active-tab="activeTab" :candidate-count="issues.length" :run-count="Math.max(jobs.length, outputs.length)" @back="emit('back')" @version-change="changeVersion" @tab-change="activeTab = $event" />
+    <ProjectDetailHeader v-if="selectedVersion" :project="project" :versions="versions" :selected-version="selectedVersion" :active-tab="activeTab" :candidate-count="issues.length" :run-count="Math.max(jobs.length, outputs.length)" @back="emit('back')" @new-audit="createNewAudit" @version-change="changeVersion" @tab-change="activeTab = $event" />
     <div v-if="!selectedVersion" class="uat-detail-loading">Loading project workspace…</div>
-    <SourceDiscoveryTab v-else-if="activeTab === 'source'" :state="discoveryState" :correlation-id="correlationId" :error="discoveryError" :error-title="discoveryErrorTitle" @find="findCandidates" @retry="retryCandidates" />
+    <SourceDiscoveryTab v-else-if="activeTab === 'source'" :state="discoveryState" :source-tree="sourceTree" :source-loading="sourceLoading" :source-error="sourceError" :correlation-id="correlationId" :error="discoveryError" :error-title="discoveryErrorTitle" @find="findCandidates" @retry="retryCandidates" @reload-source="loadSourceTree" />
     <CandidateIssuesTab v-else-if="activeTab === 'candidates'" :issues="issues" @disposition="updateDisposition" @audit="auditModalOpen = true" />
     <RunsOutputsTab v-else :jobs="jobs" :outputs="outputs" :project-name="project.name" :version-label="selectedVersion.label" @download="downloadOutput" />
     <AuditConfirmationModal v-if="selectedVersion" :open="auditModalOpen" :version-label="selectedVersion.label" :approved-count="approvedCount" :submitting="auditSubmitting" @close="auditModalOpen = false" @confirm="confirmAudit" />
+    <NewAuditVersionModal v-if="selectedVersion" :open="versionModalOpen" :project-name="project.name" :versions="versions" :initial-base-version-id="selectedVersion.version_id" :next-version-label="nextVersionLabel" :submitting="versionSubmitting" :error="versionError" @close="versionModalOpen = false" @confirm="confirmCreateVersion" />
   </main>
 </template>

@@ -101,7 +101,7 @@ function handleCreated(result: CreatedAuditProject): void {
 
 <template>
   <div class="uat-app-shell">
-    <WorkspaceHeader :running-jobs="activeProjectJobs" :primary-label="selectedProject ? 'New audit' : 'New project'" :user="authSession.user" :logging-out="loggingOut" @primary="handlePrimaryAction" @logout="$emit('logout')" />
+    <WorkspaceHeader :running-jobs="activeProjectJobs" primary-label="New project" :show-primary="!selectedProject" :user="authSession.user" :logging-out="loggingOut" @primary="handlePrimaryAction" @logout="$emit('logout')" />
     <div v-if="pageError" class="uat-page-error" role="alert"><strong>We couldn't complete that request</strong><span>{{ pageError }}</span><button type="button" @click="pageError = ''">×</button></div>
     <ProjectDetailPage v-if="selectedProject" ref="detailRef" :project="selectedProject" @back="backToProjects" @error="pageError = $event" />
     <ProjectsDashboard v-else :projects="projects" :loading="loading" @open="openProject" />

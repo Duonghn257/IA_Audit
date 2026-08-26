@@ -7,6 +7,7 @@ import type {
   OutputRevision,
   ProjectEvent,
   ProjectVersion,
+  SourceTree,
   UploadSession,
   UploadProjectInput,
 } from "../types/projects"
@@ -84,6 +85,12 @@ export function listProjects(): Promise<AuditProject[]> {
 
 export function getProject(projectId: string): Promise<AuditProject> {
   return request<AuditProject>(`/projects/${encodeURIComponent(projectId)}`)
+}
+
+export function getProjectSourceTree(projectId: string): Promise<SourceTree> {
+  return request<SourceTree>(
+    `/projects/${encodeURIComponent(projectId)}/source-documents`,
+  )
 }
 
 export function listProjectEvents(projectId: string, afterEventId = 0): Promise<ProjectEvent[]> {
@@ -255,7 +262,10 @@ export function createProjectVersion(
 ): Promise<ProjectVersion> {
   return request<ProjectVersion>(`/projects/${encodeURIComponent(projectId)}/versions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": createIdempotencyKey("version"),
+    },
     body: JSON.stringify({ base_version_id: baseVersionId }),
   })
 }
