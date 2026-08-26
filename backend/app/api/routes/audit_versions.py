@@ -7,6 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 
 from app.api.audit_errors import audit_api_errors, feature_unavailable
 from app.api.dependencies import (
+    CurrentPrincipalDependency,
     get_audit_workspace_service,
     get_discovery_service,
 )
@@ -50,9 +51,15 @@ def create_version(
     project_id: str,
     request: CreateVersionRequest,
     service: AuditServiceDependency,
+    principal: CurrentPrincipalDependency,
 ) -> ProjectVersionResponse:
     with audit_api_errors():
-        workspace = service.create_version(project_id, request.base_version_id)
+        workspace = service.create_version(
+            project_id,
+            request.base_version_id,
+            created_by_user_id=principal.user.user_id,
+            created_by_name=principal.user.display_name,
+        )
         return ProjectVersionResponse.from_domain(workspace)
 
 

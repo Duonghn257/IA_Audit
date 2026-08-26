@@ -60,6 +60,13 @@ def test_migrations_create_uat_workspace_schema(tmp_path, monkeypatch) -> None:
     assert schema.get_foreign_keys("issues")[0]["referred_table"] == "project_versions"
     issue_columns = {column["name"] for column in schema.get_columns("issues")}
     assert {"evidence_refs", "sop_refs"} <= issue_columns
+    version_columns = {
+        column["name"] for column in schema.get_columns("project_versions")
+    }
+    assert {"created_by_user_id", "created_by_name"} <= version_columns
+    assert "ix_project_versions_created_by_user_id" in {
+        index["name"] for index in schema.get_indexes("project_versions")
+    }
     engine.dispose()
 
     command.check(config)

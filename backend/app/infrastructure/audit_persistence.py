@@ -231,7 +231,19 @@ def to_project_record(project: ProjectModel, snapshot: SourceSnapshotModel, next
 
 
 def to_version_record(model: ProjectVersionModel) -> ProjectVersionRecord:
-    return ProjectVersionRecord(model.version_id, model.project_id, model.sequence_no, model.label, model.base_version_id, AuditVersionState(model.state), model.issue_revision, as_utc(model.created_at), as_utc(model.updated_at))
+    return ProjectVersionRecord(
+        model.version_id,
+        model.project_id,
+        model.sequence_no,
+        model.label,
+        model.base_version_id,
+        AuditVersionState(model.state),
+        model.issue_revision,
+        model.created_by_user_id,
+        model.created_by_name,
+        as_utc(model.created_at),
+        as_utc(model.updated_at),
+    )
 
 
 def to_issue_record(model: IssueModel) -> IssueRecord:

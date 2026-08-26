@@ -141,6 +141,7 @@ def test_versions_issues_jobs_and_output_revisions_are_isolated(tmp_path) -> Non
     database.create_schema()
     repository = SqlAlchemyAuditRepository(database.sessions)
     project_id, version_one_id = _create_project(repository)
+    source_snapshot_id = repository.get_project(project_id).source_snapshot_id
     document_id = _document_id(database)
     reference = SourceReferenceInput(
         reference_id="ref-1",
@@ -167,13 +168,35 @@ def test_versions_issues_jobs_and_output_revisions_are_isolated(tmp_path) -> Non
         project_id,
         base_version_id=version_one_id,
         version_id="version-2",
+        created_by_user_id="auditor-1",
+        created_by_name="UAT Auditor",
     )
-    copied_issue = repository.list_issues(version_two.version_id)[0]
-    assert copied_issue.issue_id != issue.issue_id
-    assert copied_issue.observed_gap == issue.observed_gap
-    assert copied_issue.source_refs[0].document_id == document_id
     assert version_two.label == "v0.2"
+    assert version_two.base_version_id == version_one_id
+    assert version_two.created_by_user_id == "auditor-1"
+    assert version_two.created_by_name == "UAT Auditor"
+    assert version_two.state == AuditVersionState.DRAFT
+    assert version_two.issue_revision == 0
+    assert repository.list_issues(version_two.version_id) == []
+    assert repository.list_output_revisions(version_two.version_id) == []
+    assert repository.get_project(project_id).source_snapshot_id == source_snapshot_id
     assert repository.get_version(project_id, version_two.version_id) == version_two
+
+    version_two_issue = repository.create_issue(
+        version_two.version_id,
+        issue_id="issue-2",
+        origin=IssueOrigin.MANUAL,
+        status=IssueStatus.NEEDS_EVIDENCE,
+        observed_gap="A new audit identified incomplete review evidence.",
+        source_refs=[
+            SourceReferenceInput(
+                reference_id="ref-2",
+                ref_kind=SourceRefKind.EVIDENCE,
+                document_id=document_id,
+                location={"sheet": "Access review", "range": "A1:B2"},
+            )
+        ],
+    )
 
     job, snapshot = repository.enqueue_audit_job(
         project_id,
@@ -181,7 +204,7 @@ def test_versions_issues_jobs_and_output_revisions_are_isolated(tmp_path) -> Non
         job_id="job-1",
         snapshot_id="input-1",
         input_hash="sha256:audit-input-1",
-        issue_payload={"issue_ids": [copied_issue.issue_id]},
+        issue_payload={"issue_ids": [version_two_issue.issue_id]},
         central_asset_versions={"guideline": "1", "template": "1"},
         correlation_id="corr-1",
     )
@@ -198,8 +221,8 @@ def test_versions_issues_jobs_and_output_revisions_are_isolated(tmp_path) -> Non
 
     updated = repository.update_issue(
         version_two.version_id,
-        copied_issue.issue_id,
-        expected_row_version=copied_issue.row_version,
+        version_two_issue.issue_id,
+        expected_row_version=version_two_issue.row_version,
         status=IssueStatus.APPROVED,
         observed_gap="Review evidence is incomplete and not retained.",
         title_hint=None,
@@ -209,15 +232,15 @@ def test_versions_issues_jobs_and_output_revisions_are_isolated(tmp_path) -> Non
         validation_flags=[],
         source_refs=[],
     )
-    assert updated.row_version == copied_issue.row_version + 1
+    assert updated.row_version == version_two_issue.row_version + 1
     assert (
         repository.list_versions(project_id)[1].state == AuditVersionState.STALE_OUTPUT
     )
     with pytest.raises(VersionConflictError):
         repository.update_issue(
             version_two.version_id,
-            copied_issue.issue_id,
-            expected_row_version=copied_issue.row_version,
+            version_two_issue.issue_id,
+            expected_row_version=version_two_issue.row_version,
             status=IssueStatus.APPROVED,
             observed_gap="Stale update",
             title_hint=None,

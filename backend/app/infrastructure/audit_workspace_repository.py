@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -17,7 +16,6 @@ from app.domain.audit import (
     IssueStatus,
     ProjectVersionRecord,
     SourceReferenceInput,
-    SourceRefKind,
     VersionConflictError,
 )
 from app.infrastructure.audit_models import IssueModel, ProjectVersionModel
@@ -68,6 +66,8 @@ class SqlAlchemyAuditWorkspaceRepository:
         *,
         base_version_id: str,
         version_id: str,
+        created_by_user_id: str,
+        created_by_name: str,
     ) -> ProjectVersionRecord:
         now = utcnow()
         with self._sessions.begin() as session:
@@ -83,47 +83,13 @@ class SqlAlchemyAuditWorkspaceRepository:
                 label=f"v0.{sequence_no}",
                 base_version_id=base_version_id,
                 state=AuditVersionState.DRAFT.value,
-                issue_revision=base.issue_revision,
+                issue_revision=0,
+                created_by_user_id=created_by_user_id,
+                created_by_name=created_by_name,
                 created_at=now,
                 updated_at=now,
             )
             session.add(version)
-            for issue in session.scalars(select(IssueModel).where(
-                IssueModel.project_version_id == base_version_id
-            )):
-                copied = IssueModel(
-                    issue_id=str(uuid4()),
-                    project_version_id=version_id,
-                    origin=issue.origin,
-                    status=issue.status,
-                    title_hint=issue.title_hint,
-                    observed_gap=issue.observed_gap,
-                    evidence_summary=issue.evidence_summary,
-                    evidence_refs=list(issue.evidence_refs or ()),
-                    sop_refs=list(issue.sop_refs or ()),
-                    risk_category=issue.risk_category,
-                    confidence=issue.confidence,
-                    validation_flags=list(issue.validation_flags),
-                    row_version=1,
-                    created_at=now,
-                    updated_at=now,
-                )
-                session.add(copied)
-                session.flush()
-                copied.source_refs.extend(
-                    source_ref_model(
-                        SourceReferenceInput(
-                            reference_id=str(uuid4()),
-                            ref_kind=SourceRefKind(ref.ref_kind),
-                            document_id=ref.document_id,
-                            unit_id=ref.unit_id,
-                            location=ref.location,
-                            quote=ref.quote,
-                        ),
-                        copied.issue_id,
-                    )
-                    for ref in issue.source_refs
-                )
         return to_version_record(version)
 
     def create_issue(

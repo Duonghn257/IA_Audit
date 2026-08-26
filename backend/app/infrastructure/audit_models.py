@@ -92,6 +92,8 @@ class ProjectVersionModel(Base):
     base_version_id: Mapped[str | None] = mapped_column(ForeignKey("project_versions.version_id"), index=True)
     state: Mapped[str] = mapped_column(String(32), index=True)
     issue_revision: Mapped[int] = mapped_column(Integer, default=0)
+    created_by_user_id: Mapped[str] = mapped_column(String(255), index=True)
+    created_by_name: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     issues: Mapped[list[IssueModel]] = relationship(back_populates="version", cascade="all, delete-orphan", foreign_keys="IssueModel.project_version_id")

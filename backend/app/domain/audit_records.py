@@ -87,6 +87,8 @@ class ProjectVersionRecord:
     base_version_id: str | None
     state: AuditVersionState
     issue_revision: int
+    created_by_user_id: str
+    created_by_name: str
     created_at: datetime
     updated_at: datetime
 

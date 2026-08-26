@@ -232,6 +232,8 @@ class SqlAlchemyAuditIntakeRepository:
                     label="v0.1",
                     state="DRAFT",
                     issue_revision=0,
+                    created_by_user_id=upload.actor_id,
+                    created_by_name=upload.actor_label,
                     created_at=now,
                     updated_at=now,
                 )

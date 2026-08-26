@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.api.schemas.audit_jobs import JobResponse
 from app.application.audit_workspace_service import VersionWorkspace
-from app.domain.audit import AuditVersionState
+from app.domain.audit import AuditVersionState, OutputStatus
 
 
 class CreateVersionRequest(BaseModel):
@@ -22,9 +22,12 @@ class ProjectVersionResponse(BaseModel):
     base_version_id: str | None
     state: AuditVersionState
     issue_revision: int
+    created_by_user_id: str
+    created_by_name: str
     issue_counts: dict[str, int]
     latest_job: JobResponse | None
     output_available: bool
+    output_status: OutputStatus | None
     allowed_actions: list[str]
     created_at: datetime
     updated_at: datetime
@@ -40,6 +43,8 @@ class ProjectVersionResponse(BaseModel):
             base_version_id=version.base_version_id,
             state=version.state,
             issue_revision=version.issue_revision,
+            created_by_user_id=version.created_by_user_id,
+            created_by_name=version.created_by_name,
             issue_counts=workspace.issue_counts,
             latest_job=(
                 JobResponse.from_domain(workspace.latest_job)
@@ -47,6 +52,7 @@ class ProjectVersionResponse(BaseModel):
                 else None
             ),
             output_available=workspace.output_available,
+            output_status=workspace.output_status,
             allowed_actions=_allowed_actions(version.state, workspace.output_available),
             created_at=version.created_at,
             updated_at=version.updated_at,

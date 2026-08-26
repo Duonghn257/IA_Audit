@@ -13,6 +13,7 @@ from app.domain.audit import (
     JobEventRecord,
     JobRecord,
     OutputRevisionRecord,
+    OutputStatus,
     ProjectVersionRecord,
     SourceReferenceInput,
 )
@@ -29,6 +30,8 @@ class AuditWorkspaceRepository(Protocol):
         *,
         base_version_id: str,
         version_id: str,
+        created_by_user_id: str,
+        created_by_name: str,
     ) -> ProjectVersionRecord: ...
     def list_issues(self, version_id: str) -> list[IssueRecord]: ...
     def get_issue(self, version_id: str, issue_id: str) -> IssueRecord: ...
@@ -49,6 +52,7 @@ class VersionWorkspace:
     issue_counts: dict[str, int]
     latest_job: JobRecord | None
     output_available: bool
+    output_status: OutputStatus | None
 
 
 class AuditWorkspaceService:
@@ -61,11 +65,20 @@ class AuditWorkspaceService:
     def get_version(self, project_id: str, version_id: str) -> VersionWorkspace:
         return self._workspace(self._repository.get_version(project_id, version_id))
 
-    def create_version(self, project_id: str, base_version_id: str) -> VersionWorkspace:
+    def create_version(
+        self,
+        project_id: str,
+        base_version_id: str,
+        *,
+        created_by_user_id: str,
+        created_by_name: str,
+    ) -> VersionWorkspace:
         version = self._repository.create_next_version(
             project_id,
             base_version_id=base_version_id,
             version_id=str(uuid4()),
+            created_by_user_id=created_by_user_id,
+            created_by_name=created_by_name,
         )
         return self._workspace(version)
 
@@ -203,4 +216,10 @@ class AuditWorkspaceService:
             counts[issue.status.value] = counts.get(issue.status.value, 0) + 1
         jobs = self._repository.list_jobs_for_version(version.version_id)
         outputs = self._repository.list_output_revisions(version.version_id)
-        return VersionWorkspace(version, counts, jobs[0] if jobs else None, bool(outputs))
+        return VersionWorkspace(
+            version,
+            counts,
+            jobs[0] if jobs else None,
+            bool(outputs),
+            outputs[0].status if outputs else None,
+        )

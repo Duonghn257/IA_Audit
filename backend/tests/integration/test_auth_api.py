@@ -295,6 +295,22 @@ def test_projects_versions_and_jobs_are_isolated_by_authenticated_user(
             ).status_code
             == 200
         )
+        created_version = client.post(
+            f"/api/v1/projects/{first_project}/versions",
+            json={"base_version_id": first_version},
+            headers={"X-CSRF-Token": first_session.csrf_token},
+        )
+        assert created_version.status_code == 201, created_version.text
+        created_payload = created_version.json()
+        assert created_payload["label"] == "v0.2"
+        assert created_payload["base_version_id"] == first_version
+        assert created_payload["created_by_user_id"] == first_session.user.user_id
+        assert created_payload["created_by_name"] == "Isolation User 1"
+        assert created_payload["state"] == "DRAFT"
+        assert created_payload["issue_revision"] == 0
+        assert created_payload["issue_counts"] == {}
+        assert created_payload["output_available"] is False
+        assert created_payload["output_status"] is None
         assert client.get(f"/api/v1/jobs/{first_job}").status_code == 200
 
         client.cookies.set("audit_session", second_token)
