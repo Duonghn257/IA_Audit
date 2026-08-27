@@ -25,6 +25,7 @@ from app.domain.audit import (
     JobState,
     JobType,
     LogicalRole,
+    RiskCategory,
     OutputRevisionRecord,
     OutputStatus,
     ProjectState,
@@ -246,6 +247,15 @@ def to_version_record(model: ProjectVersionModel) -> ProjectVersionRecord:
     )
 
 
+def _risk_category(value: str | None) -> RiskCategory | None:
+    if value is None:
+        return None
+    try:
+        return RiskCategory(value)
+    except ValueError:
+        return None
+
+
 def to_issue_record(model: IssueModel) -> IssueRecord:
     source_refs = tuple(
         SourceReferenceRecord(
@@ -266,7 +276,7 @@ def to_issue_record(model: IssueModel) -> IssueRecord:
         observed_gap=model.observed_gap,
         title_hint=model.title_hint,
         evidence_summary=model.evidence_summary,
-        risk_category=model.risk_category,
+        risk_category=_risk_category(model.risk_category),
         confidence=model.confidence,
         validation_flags=list(model.validation_flags),
         row_version=model.row_version,

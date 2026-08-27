@@ -1,106 +1,118 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 720" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif">
   <defs>
-    <marker id="arrowHead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#1a1a1a" />
-    </marker>
-    <marker id="arrowStart" markerWidth="10" markerHeight="7" refX="1" refY="3.5" orient="auto">
-      <polygon points="10 0, 0 3.5, 10 7" fill="#1a1a1a" />
-    </marker>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#252525" /></marker>
+    <marker id="arrowMuted" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#666666" /></marker>
+    <style>
+      .title{font-size:20px;font-weight:700;fill:#111}.section{font-size:13px;font-weight:700;fill:#222;letter-spacing:.2px}.box-title{font-size:14px;font-weight:700;fill:#111}.body{font-size:11px;fill:#454545}.small{font-size:10px;fill:#5a5a5a}.label{font-size:10px;font-weight:600;fill:#333}.service{fill:#fff;stroke:#3f3f3f;stroke-width:1.6}.compute{fill:#f3f6f8;stroke:#303030;stroke-width:1.8}.external{fill:#fafafa;stroke:#555;stroke-width:1.5}.line{fill:none;stroke:#252525;stroke-width:1.6;marker-end:url(#arrow)}.muted-line{fill:none;stroke:#666;stroke-width:1.3;stroke-dasharray:5 4;marker-end:url(#arrowMuted)}
+    </style>
   </defs>
+  <rect width="1200" height="760" fill="#fff" />
+  <text x="600" y="32" text-anchor="middle" class="title">Operation Report Jedi — v2 Internal UAT Architecture</text>
+  <text x="600" y="51" text-anchor="middle" class="small">Minimal AWS deployment • private data plane • PostgreSQL-backed durable jobs</text>
 
-  <!-- Title boundary -->
-  <rect x="24" y="16" width="1052" height="688" fill="none" stroke="#404040" stroke-width="2" stroke-dasharray="10 6" rx="4" />
-  <text x="550" y="44" text-anchor="middle" font-size="15" font-weight="600" fill="#000">CDL Internal Network (Portal + AWS-hosted service)</text>
+  <!-- Corporate access boundary -->
+  <rect x="24" y="78" width="190" height="574" rx="8" fill="#f7f7f7" stroke="#555" stroke-width="1.6" stroke-dasharray="8 6" />
+  <text x="119" y="103" text-anchor="middle" class="section">CDL INTERNAL ACCESS</text>
+  <circle cx="119" cy="169" r="18" fill="#dedede" stroke="#444" stroke-width="1.5" />
+  <path d="M119 188 L119 220 M91 202 L147 202 M119 220 L100 249 M119 220 L138 249" fill="none" stroke="#444" stroke-width="2.5" />
+  <text x="119" y="278" text-anchor="middle" class="box-title">Internal auditor</text>
+  <text x="119" y="298" text-anchor="middle" class="body">Browser portal</text>
+  <text x="119" y="315" text-anchor="middle" class="body">Upload evidence folder</text>
+  <text x="119" y="332" text-anchor="middle" class="body">Review • run audit • download</text>
+  <rect x="45" y="372" width="148" height="88" rx="5" class="external" />
+  <text x="119" y="399" text-anchor="middle" class="box-title">Access boundary</text>
+  <text x="119" y="419" text-anchor="middle" class="body">Corporate VPN or</text>
+  <text x="119" y="436" text-anchor="middle" class="body">approved egress IPs</text>
+  <text x="119" y="451" text-anchor="middle" class="small">No application RBAC in UAT</text>
 
-  <!-- User -->
-  <g transform="translate(500, 58)">
-    <circle cx="50" cy="22" r="14" fill="#d9d9d9" stroke="#404040" />
-    <path d="M50 40 L50 58 M32 48 L68 48 M50 58 L38 78 M50 58 L62 78" stroke="#404040" stroke-width="2" fill="none" />
-    <text x="50" y="98" text-anchor="middle" font-size="11" fill="#000">User via Portal</text>
-    <text x="50" y="112" text-anchor="middle" font-size="10" fill="#404040">Entra ID SSO • specify SharePoint folder • input issues • run audit • download</text>
-  </g>
+  <!-- AWS environment -->
+  <rect x="242" y="78" width="704" height="574" rx="8" fill="#fcfcfc" stroke="#333" stroke-width="2" stroke-dasharray="10 6" />
+  <text x="263" y="104" class="section">AWS UAT ENVIRONMENT · VPC / SECURITY GROUPS</text>
+  <text x="921" y="104" text-anchor="end" class="small">ap-southeast-1 or company-standard region</text>
+  <rect x="355" y="128" width="344" height="72" rx="6" class="service" />
+  <text x="527" y="154" text-anchor="middle" class="box-title">Application Load Balancer</text>
+  <text x="527" y="174" text-anchor="middle" class="body">HTTPS listener + ACM certificate</text>
+  <text x="527" y="190" text-anchor="middle" class="small">Ingress restricted to corporate VPN / approved IP ranges</text>
+  <rect x="736" y="128" width="174" height="72" rx="6" class="service" />
+  <text x="823" y="154" text-anchor="middle" class="box-title">Amazon ECR</text>
+  <text x="823" y="174" text-anchor="middle" class="body">Private application images</text>
+  <text x="823" y="190" text-anchor="middle" class="small">Delivery role pushes releases</text>
 
-  <!-- API Gateway between user and web app -->
-  <text x="550" y="192" text-anchor="middle" font-size="11" font-weight="600" fill="#000">Amazon API Gateway</text>
+  <!-- Compute plane -->
+  <rect x="278" y="230" width="632" height="190" rx="7" fill="#f8f8f8" stroke="#777" stroke-width="1.2" />
+  <text x="297" y="253" class="section">AMAZON ECS ON FARGATE</text>
+  <text x="891" y="253" text-anchor="end" class="small">Least-privilege execution + application task roles</text>
+  <rect x="307" y="278" width="264" height="112" rx="6" class="compute" />
+  <text x="439" y="306" text-anchor="middle" class="box-title">Portal / API service</text>
+  <text x="439" y="327" text-anchor="middle" class="body">Nginx frontend + FastAPI</text>
+  <text x="439" y="345" text-anchor="middle" class="body">Upload, commands, SSE and DOCX download</text>
+  <text x="439" y="366" text-anchor="middle" class="small">Inbound only from the ALB</text>
+  <rect x="617" y="278" width="264" height="112" rx="6" class="compute" />
+  <text x="749" y="306" text-anchor="middle" class="box-title">Background worker service</text>
+  <text x="749" y="327" text-anchor="middle" class="body">Discovery and Audit pipelines</text>
+  <text x="749" y="345" text-anchor="middle" class="body">Polls durable jobs from PostgreSQL</text>
+  <text x="749" y="366" text-anchor="middle" class="small">No inbound traffic • restart-safe processing</text>
 
-  <!-- Arrow user -> API Gateway -> web app -->
-  <line x1="550" y1="175" x2="550" y2="170" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
-  <line x1="550" y1="204" x2="550" y2="210" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
+  <!-- Data services -->
+  <rect x="278" y="478" width="190" height="118" rx="6" class="service" />
+  <text x="373" y="506" text-anchor="middle" class="box-title">Amazon RDS</text>
+  <text x="373" y="527" text-anchor="middle" class="body">PostgreSQL</text>
+  <text x="373" y="545" text-anchor="middle" class="body">Projects • versions • issues</text>
+  <text x="373" y="563" text-anchor="middle" class="body">Jobs • events • audit metadata</text>
+  <text x="373" y="582" text-anchor="middle" class="small">Encrypted + automated backups</text>
+  <rect x="499" y="478" width="190" height="118" rx="6" class="service" />
+  <text x="594" y="506" text-anchor="middle" class="box-title">Amazon S3</text>
+  <text x="594" y="527" text-anchor="middle" class="body">Private UAT bucket</text>
+  <text x="594" y="545" text-anchor="middle" class="body">Source snapshots • parsed artefacts</text>
+  <text x="594" y="563" text-anchor="middle" class="body">Central assets • versioned DOCX</text>
+  <text x="594" y="582" text-anchor="middle" class="small">Block Public Access + lifecycle rules</text>
+  <rect x="720" y="478" width="190" height="118" rx="6" class="service" />
+  <text x="815" y="506" text-anchor="middle" class="box-title">Secrets Manager</text>
+  <text x="815" y="527" text-anchor="middle" class="body">Anthropic API key</text>
+  <text x="815" y="545" text-anchor="middle" class="body">Database credentials</text>
+  <text x="815" y="563" text-anchor="middle" class="body">Named application secrets</text>
+  <text x="815" y="582" text-anchor="middle" class="small">Read only by scoped ECS roles</text>
 
-  <!-- #1 Left: SharePoint evidence source (smaller + centered text) -->
-  <rect x="48" y="228" width="220" height="132" fill="#f5f5f5" stroke="#404040" stroke-width="2" rx="4" />
-  <text x="158" y="286" text-anchor="middle" font-size="12" font-weight="600" fill="#000">SharePoint Project Folder</text>
-  <text x="158" y="306" text-anchor="middle" font-size="9.5" fill="#404040">User uploads files to SharePoint</text>
-  <text x="158" y="322" text-anchor="middle" font-size="9.5" fill="#404040">Portal receives folder URL / path</text>
+  <!-- External AI and observability -->
+  <rect x="976" y="230" width="200" height="160" rx="7" class="external" />
+  <text x="1076" y="255" text-anchor="middle" class="section">EXTERNAL AI SERVICE</text>
+  <text x="1076" y="294" text-anchor="middle" class="box-title">Anthropic API endpoint</text>
+  <text x="1076" y="317" text-anchor="middle" class="body">Existing Claude model access</text>
+  <text x="1076" y="338" text-anchor="middle" class="body">Outbound HTTPS 443</text>
+  <text x="1076" y="365" text-anchor="middle" class="small">Amazon Bedrock is not required</text>
+  <rect x="976" y="478" width="200" height="118" rx="6" class="external" />
+  <text x="1076" y="506" text-anchor="middle" class="box-title">Amazon CloudWatch</text>
+  <text x="1076" y="527" text-anchor="middle" class="body">API and worker logs</text>
+  <text x="1076" y="545" text-anchor="middle" class="body">Basic ECS / error alarms</text>
+  <text x="1076" y="563" text-anchor="middle" class="body">Operational troubleshooting</text>
+  <text x="1076" y="582" text-anchor="middle" class="small">UAT retention policy</text>
 
-  <!-- Arrow left to center -->
-  <path d="M268 294 L420 294" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
-  <text x="340" y="286" text-anchor="middle" font-size="9" fill="#404040">Microsoft Graph read</text>
+  <!-- Traffic and dependency arrows -->
+  <path d="M193 416 L224 416 L224 164 L350 164" class="line" />
+  <text x="270" y="154" text-anchor="middle" class="label">HTTPS</text>
+  <path d="M527 200 L527 218 L439 218 L439 273" class="line" />
+  <text x="473" y="216" text-anchor="middle" class="label">route portal + API</text>
+  <path d="M823 200 L823 217 L594 217 L594 264 L439 264 L439 273" class="muted-line" />
+  <path d="M823 200 L823 264 L749 264 L749 273" class="muted-line" />
+  <text x="702" y="214" text-anchor="middle" class="label">pull images</text>
+  <path d="M399 390 L399 443 L373 443 L373 473" class="line" />
+  <path d="M699 390 L699 443 L407 443 L407 473" class="line" />
+  <text x="495" y="438" text-anchor="middle" class="label">SQL metadata + durable job queue</text>
+  <path d="M475 390 L475 452 L560 452 L560 473" class="line" />
+  <path d="M775 390 L775 452 L628 452 L628 473" class="line" />
+  <text x="628" y="449" text-anchor="middle" class="label">private object read / write</text>
+  <path d="M815 473 L815 446 L845 446 L845 395" class="muted-line" />
+  <path d="M784 473 L784 431 L537 431 L537 395" class="muted-line" />
+  <text x="816" y="425" text-anchor="middle" class="label">inject secrets</text>
+  <path d="M881 334 L971 334" class="line" />
+  <text x="926" y="325" text-anchor="middle" class="label">HTTPS 443</text>
+  <path d="M881 374 L936 374 L936 515 L971 515" class="muted-line" />
+  <path d="M571 374 L950 374 L950 550 L971 550" class="muted-line" />
+  <text x="935" y="463" text-anchor="middle" class="label" transform="rotate(90 935 463)">logs + metrics</text>
 
-  <!-- #2 Center: Web app (smaller + centered text) -->
-  <rect x="420" y="228" width="260" height="132" fill="#f5f5f5" stroke="#404040" stroke-width="2" rx="4" />
-  <text x="550" y="286" text-anchor="middle" font-size="13" font-weight="600" fill="#000">Web App (API + Orchestrator + Worker)</text>
-  <text x="550" y="304" text-anchor="middle" font-size="9.5" fill="#404040">AWS ECS / EKS (container)</text>
-
-  <!-- Arrow center <-> right -->
-  <line x1="680" y1="294" x2="812" y2="294" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" marker-start="url(#arrowStart)" />
-  <text x="746" y="286" text-anchor="middle" font-size="9" fill="#404040">read/write</text>
-
-  <!-- #3 Right: Temp storage / metadata (smaller + centered text) -->
-  <rect x="812" y="228" width="240" height="132" fill="#f5f5f5" stroke="#404040" stroke-width="2" rx="4" />
-  <text x="932" y="288" text-anchor="middle" font-size="12" font-weight="600" fill="#000">Temp storage / metadata</text>
-  <text x="932" y="306" text-anchor="middle" font-size="9.5" fill="#404040">S3 + ElastiCache (job state)</text>
-
-  <!-- Branch line from hub bottom + horizontal bus (ends at last spoke) -->
-  <line x1="550" y1="360" x2="550" y2="410" stroke="#1a1a1a" stroke-width="1.5" />
-  <line x1="140" y1="410" x2="990" y2="410" stroke="#1a1a1a" stroke-width="1.5" />
-
-  <!-- Spokes down -->
-  <line x1="140" y1="410" x2="140" y2="438" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
-  <line x1="310" y1="410" x2="310" y2="438" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
-  <line x1="480" y1="410" x2="480" y2="438" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
-  <line x1="650" y1="410" x2="650" y2="438" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
-  <line x1="820" y1="410" x2="820" y2="438" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
-  <line x1="990" y1="410" x2="990" y2="438" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrowHead)" />
-
-  <!-- Bottom row boxes (monochrome) — generalized and reusable -->
-  <!-- #4 Document parsing -->
-  <rect x="60" y="440" width="160" height="96" fill="#ffffff" stroke="#404040" stroke-width="1.5" rx="3" />
-  <text x="140" y="462" text-anchor="middle" font-size="11" font-weight="600" fill="#000">Document Parsing</text>
-  <text x="140" y="480" text-anchor="middle" font-size="9.5" fill="#404040">AWS Textract</text>
-  <text x="140" y="496" text-anchor="middle" font-size="9.5" fill="#404040">PDF / image OCR</text>
-
-  <!-- #5 Persistent storage -->
-  <rect x="230" y="440" width="160" height="96" fill="#ffffff" stroke="#404040" stroke-width="1.5" rx="3" />
-  <text x="310" y="458" text-anchor="middle" font-size="11" font-weight="600" fill="#000">Persistent Storage</text>
-  <text x="310" y="478" text-anchor="middle" font-size="9.5" fill="#404040">S3 output / artefacts</text>
-  <text x="310" y="496" text-anchor="middle" font-size="9.5" fill="#404040">Portal download packages</text>
-
-  <!-- LLM endpoint -->
-  <rect x="400" y="440" width="160" height="96" fill="#ffffff" stroke="#404040" stroke-width="1.5" rx="3" />
-  <text x="480" y="462" text-anchor="middle" font-size="11" font-weight="600" fill="#000">LLM Endpoint</text>
-  <text x="480" y="480" text-anchor="middle" font-size="9.5" fill="#404040">AWS Bedrock Claude</text>
-  <text x="480" y="496" text-anchor="middle" font-size="9.5" fill="#404040">Claude model endpoint</text>
-
-  <!-- Identity & access -->
-  <rect x="570" y="440" width="160" height="96" fill="#ffffff" stroke="#404040" stroke-width="1.5" rx="3" />
-  <text x="650" y="462" text-anchor="middle" font-size="11" font-weight="600" fill="#000">Identity &amp; Access</text>
-  <text x="650" y="480" text-anchor="middle" font-size="9.5" fill="#404040">Entra ID (Portal SSO)</text>
-  <text x="650" y="496" text-anchor="middle" font-size="9.5" fill="#404040">Graph folder access</text>
-
-  <!-- #6 Logs / Observability -->
-  <rect x="740" y="440" width="160" height="96" fill="#ffffff" stroke="#404040" stroke-width="1.5" rx="3" />
-  <text x="820" y="462" text-anchor="middle" font-size="11" font-weight="600" fill="#000">Logs / Observability</text>
-  <text x="820" y="480" text-anchor="middle" font-size="9.5" fill="#404040">Amazon CloudWatch</text>
-  <text x="820" y="496" text-anchor="middle" font-size="9.5" fill="#404040">Logs • metrics • traces</text>
-
-  <!-- #7 Azure SQL Database -->
-  <rect x="910" y="440" width="160" height="96" fill="#ffffff" stroke="#404040" stroke-width="1.5" rx="3" />
-  <text x="990" y="462" text-anchor="middle" font-size="11" font-weight="600" fill="#000">Amazon RDS</text>
-  <text x="990" y="480" text-anchor="middle" font-size="9.5" fill="#404040">Case metadata</text>
-  <text x="990" y="496" text-anchor="middle" font-size="9.5" fill="#404040">Audit logs</text>
-
-  <!-- Footnote -->
-  <text x="550" y="570" text-anchor="middle" font-size="9.5" fill="#606060">AWS reference architecture - users upload evidence to SharePoint, specify the project folder in Portal, and workers read via Microsoft Graph; LLM via AWS Bedrock Claude.</text>
+  <!-- Notes -->
+  <text x="600" y="690" text-anchor="middle" class="body">Users upload files through the portal. S3 objects remain private; DOCX downloads are served through the application endpoint.</text>
+  <text x="600" y="712" text-anchor="middle" class="small">Deferred / not required for v2 UAT: API Gateway, EKS, SQS/DLQ, Bedrock, Textract, Cognito, EFS, ElastiCache, Entra ID, SharePoint and Microsoft Graph.</text>
+  <text x="600" y="733" text-anchor="middle" class="small">Route 53 is optional when company DNS is hosted in AWS. AWS-managed encryption is sufficient for this UAT.</text>
 </svg>

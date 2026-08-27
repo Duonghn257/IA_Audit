@@ -6,7 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.api.schemas.audit_common import SourceReferenceRequest, SourceReferenceResponse
-from app.domain.audit import IssueOrigin, IssueRecord, IssueStatus
+from app.domain.audit import IssueOrigin, IssueRecord, IssueStatus, RiskCategory
 
 
 class CreateManualIssueRequest(BaseModel):
@@ -15,7 +15,7 @@ class CreateManualIssueRequest(BaseModel):
     evidence_summary: str | None = None
     evidence_refs: list[str] = Field(default_factory=list)
     sop_refs: list[str] = Field(default_factory=list)
-    risk_category: str | None = None
+    risk_category: RiskCategory | None = None
     status: IssueStatus = IssueStatus.DRAFT
     source_refs: list[SourceReferenceRequest] = Field(default_factory=list)
 
@@ -41,7 +41,7 @@ class IssueResponse(BaseModel):
     evidence_summary: str | None
     evidence_refs: list[str]
     sop_refs: list[str]
-    risk_category: str | None
+    risk_category: RiskCategory | None
     confidence: float | None
     validation_flags: list[str]
     row_version: int

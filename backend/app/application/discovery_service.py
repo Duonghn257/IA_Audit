@@ -17,6 +17,7 @@ from app.domain.audit import (
     JobState,
     JobType,
     LogicalRole,
+    RiskCategory,
     SourceDocumentRecord,
     SourceNotReadyError,
 )
@@ -266,7 +267,7 @@ def _normalise_candidate(value: CandidateIssueInput) -> CandidateIssueInput:
         evidence_summary=evidence_summary,
         evidence_refs=evidence_refs,
         sop_refs=sop_refs,
-        risk_category=value.risk_category.strip(),
+        risk_category=RiskCategory(value.risk_category.strip()),
     )
 
 

@@ -15,7 +15,12 @@ def test_openapi_publishes_v2_workspace_contract(tmp_path: Path) -> None:
         storage_root=tmp_path / "storage",
     )
     app = create_app(settings=settings)
-
+    assert app.openapi()["components"]["schemas"]["RiskCategory"]["enum"] == [
+        "Compliance",
+        "Operational",
+        "Strategic",
+        "Financial",
+    ]
     paths = app.openapi()["paths"]
 
     assert set(paths["/api/v1/projects/{project_id}/versions"]) == {"get", "post"}

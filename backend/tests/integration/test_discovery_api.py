@@ -4,7 +4,7 @@ from pathlib import Path
 from app.application.discovery_service import DiscoveryDocument
 from app.bootstrap.api import create_app
 from app.core.settings import ApiSettings
-from app.domain.audit import CandidateIssueInput, LogicalRole
+from app.domain.audit import CandidateIssueInput, LogicalRole, RiskCategory
 from docx import Document
 from fastapi.testclient import TestClient
 
@@ -111,7 +111,7 @@ class SuccessfulDiscoveryEngine:
                     "Process Understanding/evidence.docx - Review result",
                 ),
                 sop_refs=("Process SOP/criteria.docx - Section 3.2",),
-                risk_category="Access Management",
+                risk_category=RiskCategory.OPERATIONAL,
             ),
         )
 
@@ -161,6 +161,7 @@ def test_discovery_job_persists_candidate_reference_arrays(
         candidate = issues.json()[0]
         assert candidate["origin"] == "AI_DISCOVERED"
         assert candidate["status"] == "READY_FOR_REVIEW"
+        assert candidate["risk_category"] == "Operational"
         assert candidate["evidence_refs"] == [
             "Process Understanding/evidence.docx - Review result"
         ]
@@ -174,6 +175,50 @@ def test_discovery_job_persists_candidate_reference_arrays(
             "PREPARING_SOURCE",
             "SAVING_CANDIDATES",
         ]
+
+
+def test_issue_risk_category_is_restricted_to_supported_values(
+    tmp_path: Path,
+) -> None:
+    app = create_app(settings=_settings(tmp_path))
+
+    with TestClient(app) as client:
+        project_id, version_id = _create_project(client)
+        issues_url = (
+            f"/api/v1/projects/{project_id}/versions/{version_id}/issues"
+        )
+
+        invalid = client.post(
+            issues_url,
+            json={
+                "observed_gap": "A manual issue with an invalid category.",
+                "risk_category": "Access Management",
+            },
+        )
+        assert invalid.status_code == 422
+
+        created = client.post(
+            issues_url,
+            json={
+                "observed_gap": "A manual issue with a supported category.",
+                "risk_category": "Financial",
+            },
+        )
+        assert created.status_code == 201, created.text
+        issue = created.json()
+        assert issue["risk_category"] == "Financial"
+
+        invalid_update = client.put(
+            f"{issues_url}/{issue['issue_id']}",
+            json={
+                "row_version": issue["row_version"],
+                "observed_gap": issue["observed_gap"],
+                "risk_category": "Technology",
+            },
+        )
+        assert invalid_update.status_code == 422
+
+    app.state.database.dispose()
 
 
 def test_failed_discovery_can_retry_and_succeeded_job_cannot(

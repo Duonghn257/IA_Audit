@@ -17,6 +17,7 @@ from app.domain.audit import (
     OutputRevisionRecord,
     OutputStatus,
     ProjectVersionRecord,
+    RiskCategory,
     SourceDocumentRecord,
     SourceReferenceInput,
 )
@@ -149,7 +150,7 @@ class AuditWorkspaceService:
         evidence_summary: str | None,
         evidence_refs: Sequence[str],
         sop_refs: Sequence[str],
-        risk_category: str | None,
+        risk_category: RiskCategory | None,
         source_refs: Sequence[SourceReferenceInput],
     ) -> IssueRecord:
         return self._repository.create_issue(
@@ -180,7 +181,7 @@ class AuditWorkspaceService:
         evidence_summary: str | None,
         evidence_refs: Sequence[str],
         sop_refs: Sequence[str],
-        risk_category: str | None,
+        risk_category: RiskCategory | None,
         confidence: float | None,
         validation_flags: Sequence[str],
         source_refs: Sequence[SourceReferenceInput],

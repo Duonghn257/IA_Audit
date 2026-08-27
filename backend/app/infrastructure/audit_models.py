@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -100,6 +101,14 @@ class ProjectVersionModel(Base):
 
 
 class IssueModel(Base):
+    __table_args__ = (
+        CheckConstraint(
+            "risk_category IS NULL OR risk_category IN "
+            "('Compliance', 'Operational', 'Strategic', 'Financial')",
+            name="ck_issues_risk_category",
+        ),
+    )
+
     __tablename__ = "issues"
     issue_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_version_id: Mapped[str] = mapped_column(ForeignKey("project_versions.version_id", ondelete="CASCADE"), index=True)

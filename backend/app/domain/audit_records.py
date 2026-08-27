@@ -14,6 +14,7 @@ from app.domain.audit_states import (
     LogicalRole,
     OutputStatus,
     ProjectState,
+    RiskCategory,
     SourceRefKind,
     UploadSessionState,
 )
@@ -134,7 +135,7 @@ class CandidateIssueInput:
     evidence_summary: str
     evidence_refs: tuple[str, ...]
     sop_refs: tuple[str, ...]
-    risk_category: str
+    risk_category: RiskCategory
 
 
 @dataclass(frozen=True)
@@ -146,7 +147,7 @@ class IssueRecord:
     observed_gap: str
     title_hint: str | None
     evidence_summary: str | None
-    risk_category: str | None
+    risk_category: RiskCategory | None
     confidence: float | None
     validation_flags: list[str]
     row_version: int

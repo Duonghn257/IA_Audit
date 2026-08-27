@@ -1,11 +1,11 @@
 # UAT API Contract — Operation Report Jedi
 
-> Contract version: `1.1.0-uat`
+> Contract version: `1.2.0-uat`
 > Base URL: `/api/v1`  
 > Content type mặc định: `application/json`
 > OpenAPI runtime: `/openapi.json`
 > Swagger UI: `/docs`  
-> Cập nhật: 26/08/2026
+> Cập nhật: 27/08/2026
 
 ## 1. Mục đích và phạm vi
 
@@ -371,7 +371,7 @@ cấp project: `v0.1`, `v0.2`, ...
   "sop_refs": [
     "Process SOP/Access Review SOP.docx - Section 3.2"
   ],
-  "risk_category": "Access Management",
+  "risk_category": "Operational",
   "confidence": 0.86,
   "validation_flags": [],
   "row_version": 3,
@@ -400,7 +400,7 @@ cấp project: `v0.1`, `v0.2`, ...
 | `observed_gap` | Required, không được blank |
 | `title_hint` | AI candidate required; manual draft optional |
 | `evidence_summary` | AI candidate required; manual issue optional |
-| `risk_category` | Optional |
+| `risk_category` | AI candidate required; manual issue optional; nếu có phải là `Compliance | Operational | Strategic | Financial` |
 | `confidence` | `0..1`, AI-owned; manual issue có thể `null` |
 | `evidence_refs` | Discovery candidate cần ít nhất một evidence reference string |
 | `sop_refs` | Discovery candidate cần ít nhất một SOP/criteria reference string |
@@ -785,7 +785,7 @@ actions của một version.
   "observed_gap": "Quarterly access review evidence was not retained.",
   "title_hint": "Access review evidence retention",
   "evidence_summary": null,
-  "risk_category": null,
+  "risk_category": "Compliance",
   "status": "DRAFT",
   "source_refs": []
 }
@@ -794,6 +794,9 @@ actions của một version.
 `observed_gap` là field duy nhất bắt buộc cho manual issue. Backend luôn set
 `origin = MANUAL`; client không được gửi `origin`, `confidence`,
 `validation_flags` hoặc ID/timestamp.
+
+`risk_category` có thể `null` với manual issue; nếu có giá trị thì chỉ nhận
+`Compliance`, `Operational`, `Strategic` hoặc `Financial`.
 
 **Output — `201 Issue`:** `row_version = 1`.
 
@@ -822,7 +825,7 @@ actions của một version.
   "row_version": 3,
   "observed_gap": "Quarterly access review evidence was incomplete and not retained.",
   "evidence_summary": "One of four quarterly reviews was unavailable.",
-  "risk_category": "Access Management",
+  "risk_category": "Strategic",
   "source_refs": [
     {
       "ref_kind": "EVIDENCE",
@@ -841,6 +844,7 @@ actions của một version.
 | Field | Required | Rule |
 |---|---:|---|
 | `row_version` | Có | Integer `>= 1` |
+| `risk_category` | Không | `null` hoặc một trong `Compliance | Operational | Strategic | Financial` |
 | Business field cần đổi | Có ít nhất một | `title_hint`, `observed_gap`, `evidence_summary`, `risk_category`, `source_refs` |
 | `status` | Không | Dùng disposition API cho review decision |
 | `origin`, `confidence`, `validation_flags` | Không được gửi | System/AI-owned |
@@ -1098,7 +1102,7 @@ Payload đầy đủ của `PUT issue` hiện tại:
   "observed_gap": "Quarterly access review evidence was incomplete.",
   "title_hint": "Access review evidence retention",
   "evidence_summary": "One of four quarterly reviews was unavailable.",
-  "risk_category": "Access Management",
+  "risk_category": "Financial",
   "status": "READY_FOR_REVIEW",
   "confidence": 0.86,
   "validation_flags": [],

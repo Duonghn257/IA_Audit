@@ -16,6 +16,7 @@ from app.domain.audit import (
     IssueStatus,
     LogicalRole,
     ProjectVersionRecord,
+    RiskCategory,
     SourceDocumentRecord,
     SourceReferenceInput,
     VersionConflictError,
@@ -139,7 +140,7 @@ class SqlAlchemyAuditWorkspaceRepository:
         evidence_summary: str | None = None,
         evidence_refs: Sequence[str] = (),
         sop_refs: Sequence[str] = (),
-        risk_category: str | None = None,
+        risk_category: RiskCategory | None = None,
         confidence: float | None = None,
         validation_flags: Sequence[str] = (),
         source_refs: Sequence[SourceReferenceInput] = (),
@@ -160,7 +161,7 @@ class SqlAlchemyAuditWorkspaceRepository:
                 evidence_summary=evidence_summary,
                 evidence_refs=list(evidence_refs),
                 sop_refs=list(sop_refs),
-                risk_category=risk_category,
+                risk_category=risk_category.value if risk_category else None,
                 confidence=confidence,
                 validation_flags=list(validation_flags),
                 row_version=1,
@@ -200,7 +201,7 @@ class SqlAlchemyAuditWorkspaceRepository:
         evidence_summary: str | None,
         evidence_refs: Sequence[str] = (),
         sop_refs: Sequence[str] = (),
-        risk_category: str | None,
+        risk_category: RiskCategory | None,
         confidence: float | None,
         validation_flags: Sequence[str],
         source_refs: Sequence[SourceReferenceInput],
@@ -222,7 +223,7 @@ class SqlAlchemyAuditWorkspaceRepository:
             issue.evidence_summary = evidence_summary
             issue.evidence_refs = list(evidence_refs)
             issue.sop_refs = list(sop_refs)
-            issue.risk_category = risk_category
+            issue.risk_category = risk_category.value if risk_category else None
             issue.confidence = confidence
             issue.validation_flags = list(validation_flags)
             issue.row_version += 1

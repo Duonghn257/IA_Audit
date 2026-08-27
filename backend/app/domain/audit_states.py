@@ -97,6 +97,13 @@ class IssueStatus(StrEnum):
     OUT_OF_SCOPE = "OUT_OF_SCOPE"
 
 
+class RiskCategory(StrEnum):
+    COMPLIANCE = "Compliance"
+    OPERATIONAL = "Operational"
+    STRATEGIC = "Strategic"
+    FINANCIAL = "Financial"
+
+
 class SourceRefKind(StrEnum):
     EVIDENCE = "EVIDENCE"
     CRITERIA = "CRITERIA"

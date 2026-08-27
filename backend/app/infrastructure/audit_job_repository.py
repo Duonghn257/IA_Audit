@@ -288,7 +288,7 @@ class SqlAlchemyAuditJobRepository:
                         evidence_summary=candidate.evidence_summary,
                         evidence_refs=list(candidate.evidence_refs),
                         sop_refs=list(candidate.sop_refs),
-                        risk_category=candidate.risk_category or None,
+                        risk_category=candidate.risk_category.value,
                         confidence=None,
                         validation_flags=[],
                         row_version=1,
