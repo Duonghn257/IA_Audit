@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
+import PrimaryButton from "../../shared/ui/PrimaryButton.vue"
 import type { ProjectVersion } from "../../shared/types/projects"
 
 const props = defineProps<{
@@ -91,10 +92,10 @@ function selectBaseVersion(versionId: string): void {
 
           <footer>
             <button class="uat-button uat-button-secondary" type="button" :disabled="submitting" @click="emit('close')">Cancel</button>
-            <button class="uat-button uat-button-primary" type="button" :disabled="submitting || !selectedBaseVersionId" @click="emit('confirm', selectedBaseVersionId)">
+            <PrimaryButton type="button" :disabled="submitting || !selectedBaseVersionId" @click="emit('confirm', selectedBaseVersionId)">
               <span v-if="submitting" class="uat-button-spinner" aria-hidden="true" />
               {{ submitting ? "Creating…" : `Create ${nextVersionLabel}` }}
-            </button>
+            </PrimaryButton>
           </footer>
         </section>
       </div>

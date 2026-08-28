@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from "vue"
+import PrimaryButton from "../../shared/ui/PrimaryButton.vue"
 
 const props = defineProps<{
   open: boolean
@@ -38,7 +39,7 @@ watch(() => props.open, (open) => {
         <div class="uat-audit-warning"><span>△</span><p>1 manual issue has no evidence references.<br />It can proceed under the manual-issue policy.</p></div>
         <button class="uat-snapshot-toggle" type="button">View approved issue snapshot <span>⌄</span></button>
         <label class="uat-snapshot-check"><input v-model="acknowledged" type="checkbox" /><span>✓</span>I understand this run uses a frozen input snapshot.</label>
-        <footer><button class="uat-button uat-button-secondary" type="button" :disabled="submitting" @click="emit('close')">Cancel</button><button class="uat-button uat-button-primary" type="button" :disabled="!acknowledged || submitting" @click="emit('confirm')">{{ submitting ? "Starting…" : "Start audit" }}</button></footer>
+        <footer><button class="uat-button uat-button-secondary" type="button" :disabled="submitting" @click="emit('close')">Cancel</button><PrimaryButton type="button" :disabled="!acknowledged || submitting" @click="emit('confirm')">{{ submitting ? "Starting…" : "Start audit" }}</PrimaryButton></footer>
       </section>
     </div>
   </Teleport>

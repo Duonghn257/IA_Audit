@@ -4,6 +4,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import {
   apiUrl,
   createProjectVersion,
+  createVersionIssue,
+  getVersionIssue,
   getJob,
   getProjectSourceTree,
   listProjectVersions,
@@ -11,6 +13,7 @@ import {
   listVersionOutputs,
   retryDiscoveryJob,
   setIssueDisposition,
+  updateVersionIssue,
   startAuditJob,
   startDiscoveryJob,
 } from "../../shared/api/projects"
@@ -18,8 +21,10 @@ import type {
   AuditJob,
   AuditProject,
   CandidateIssue,
+  CreateIssueInput,
   IssueStatus,
   OutputRevision,
+  UpdateIssueInput,
   ProjectVersion,
   SourceTree,
 } from "../../shared/types/projects"
@@ -37,6 +42,9 @@ const activeTab = ref<ProjectTab>("source")
 const versions = ref<ProjectVersion[]>([])
 const selectedVersionId = ref("")
 const issues = ref<CandidateIssue[]>([])
+const issuesLoading = ref(false)
+const issueSaving = ref(false)
+const issueError = ref("")
 const outputs = ref<OutputRevision[]>([])
 const jobs = ref<AuditJob[]>([])
 const sourceTree = ref<SourceTree | null>(null)
@@ -102,12 +110,7 @@ async function loadVersionData(): Promise<void> {
     discoveryError.value = version.latest_job.error || "Candidate discovery did not complete."
     correlationId.value = version.latest_job.correlation_id
   }
-  try {
-    const loadedIssues = await listVersionIssues(props.project.project_id, version.version_id)
-    issues.value = loadedIssues
-  } catch {
-    issues.value = []
-  }
+  await loadIssues(version.version_id)
   try {
     outputs.value = await listVersionOutputs(props.project.project_id, version.version_id)
   } catch {
@@ -242,6 +245,41 @@ function discoveryFailureTitle(state: AuditJob["state"]): string {
   return state === "INCOMPLETE" ? "Discovery incomplete" : "Discovery failed"
 }
 
+async function loadIssues(versionId = selectedVersionId.value): Promise<void> {
+  issuesLoading.value = true
+  issueError.value = ""
+  try { issues.value = await listVersionIssues(props.project.project_id, versionId) }
+  catch (error) { issueError.value = error instanceof Error ? error.message : "Could not load candidate issues." }
+  finally { issuesLoading.value = false }
+}
+
+async function loadIssueDetail(issueId: string): Promise<void> {
+  try {
+    const issue = await getVersionIssue(props.project.project_id, selectedVersionId.value, issueId)
+    const index = issues.value.findIndex((item) => item.issue_id === issueId)
+    if (index >= 0) issues.value.splice(index, 1, issue)
+  } catch (error) { issueError.value = error instanceof Error ? error.message : "Could not load issue details." }
+}
+
+async function createIssue(input: CreateIssueInput): Promise<void> {
+  issueSaving.value = true
+  issueError.value = ""
+  try { issues.value.push(await createVersionIssue(props.project.project_id, selectedVersionId.value, input)) }
+  catch (error) { issueError.value = error instanceof Error ? error.message : "Could not create the issue." }
+  finally { issueSaving.value = false }
+}
+
+async function updateIssue(issue: CandidateIssue, input: UpdateIssueInput): Promise<void> {
+  issueSaving.value = true
+  issueError.value = ""
+  try {
+    const updated = await updateVersionIssue(props.project.project_id, selectedVersionId.value, issue.issue_id, issue, input)
+    const index = issues.value.findIndex((item) => item.issue_id === issue.issue_id)
+    if (index >= 0) issues.value.splice(index, 1, updated)
+  } catch (error) { issueError.value = error instanceof Error ? error.message : "Could not save the issue." }
+  finally { issueSaving.value = false }
+}
+
 async function updateDisposition(issue: CandidateIssue, status: IssueStatus): Promise<void> {
   const index = issues.value.findIndex((item) => item.issue_id === issue.issue_id)
   if (index < 0) return
@@ -249,12 +287,14 @@ async function updateDisposition(issue: CandidateIssue, status: IssueStatus): Pr
     issues.value.splice(index, 1, { ...issue, status, row_version: issue.row_version + 1 })
     return
   }
+  issueSaving.value = true
+  issueError.value = ""
   try {
     const updated = await setIssueDisposition(props.project.project_id, selectedVersion.value.version_id, issue.issue_id, issue.row_version, status)
     issues.value.splice(index, 1, updated)
   } catch (error) {
-    emit("error", error instanceof Error ? error.message : "Could not save the review decision.")
-  }
+    issueError.value = error instanceof Error ? error.message : "Could not save the review decision."
+  } finally { issueSaving.value = false }
 }
 
 async function confirmAudit(): Promise<void> {
@@ -288,10 +328,12 @@ defineExpose({ createNewAudit })
 <template>
   <main class="uat-project-detail">
     <ProjectDetailHeader v-if="selectedVersion" :project="project" :versions="versions" :selected-version="selectedVersion" :active-tab="activeTab" :candidate-count="issues.length" :run-count="Math.max(jobs.length, outputs.length)" @back="emit('back')" @new-audit="createNewAudit" @version-change="changeVersion" @tab-change="activeTab = $event" />
-    <div v-if="!selectedVersion" class="uat-detail-loading">Loading project workspace…</div>
-    <SourceDiscoveryTab v-else-if="activeTab === 'source'" :state="discoveryState" :source-tree="sourceTree" :source-loading="sourceLoading" :source-error="sourceError" :correlation-id="correlationId" :error="discoveryError" :error-title="discoveryErrorTitle" @find="findCandidates" @retry="retryCandidates" @reload-source="loadSourceTree" />
-    <CandidateIssuesTab v-else-if="activeTab === 'candidates'" :issues="issues" @disposition="updateDisposition" @audit="auditModalOpen = true" />
-    <RunsOutputsTab v-else :jobs="jobs" :outputs="outputs" :project-name="project.name" :version-label="selectedVersion.label" @download="downloadOutput" />
+    <div class="uat-project-content">
+      <div v-if="!selectedVersion" class="uat-detail-loading">Loading project workspace…</div>
+      <SourceDiscoveryTab v-else-if="activeTab === 'source'" :state="discoveryState" :source-tree="sourceTree" :source-loading="sourceLoading" :source-error="sourceError" :correlation-id="correlationId" :error="discoveryError" :error-title="discoveryErrorTitle" @find="findCandidates" @retry="retryCandidates" @reload-source="loadSourceTree" />
+      <CandidateIssuesTab v-else-if="activeTab === 'candidates'" :issues="issues" :loading="issuesLoading" :saving="issueSaving" :error="issueError" @select="loadIssueDetail" @create="createIssue" @update="updateIssue" @disposition="updateDisposition" @retry="loadIssues()" @audit="auditModalOpen = true" />
+      <RunsOutputsTab v-else :jobs="jobs" :outputs="outputs" :project-name="project.name" :version-label="selectedVersion.label" @download="downloadOutput" />
+    </div>
     <AuditConfirmationModal v-if="selectedVersion" :open="auditModalOpen" :version-label="selectedVersion.label" :approved-count="approvedCount" :submitting="auditSubmitting" @close="auditModalOpen = false" @confirm="confirmAudit" />
     <NewAuditVersionModal v-if="selectedVersion" :open="versionModalOpen" :project-name="project.name" :versions="versions" :initial-base-version-id="selectedVersion.version_id" :next-version-label="nextVersionLabel" :submitting="versionSubmitting" :error="versionError" @close="versionModalOpen = false" @confirm="confirmCreateVersion" />
   </main>

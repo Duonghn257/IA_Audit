@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
+import PrimaryButton from "../../shared/ui/PrimaryButton.vue"
 
 import {
   createUploadSession,
@@ -173,7 +174,7 @@ function roleFound(role: Exclude<LogicalRole, "CONTEXT">): boolean {
             <p class="uat-relative-note">♢&nbsp;&nbsp; Only relative paths are sent. Your local absolute path is never stored.</p>
             <p v-if="error" class="uat-inline-error">{{ error }}</p>
           </div>
-          <footer class="uat-project-modal-footer"><button class="uat-button uat-button-secondary" type="button" @click="close">Cancel</button><button class="uat-button uat-button-primary" type="button" :disabled="!canContinue || validating" @click="continueToValidation">{{ validating ? "Validating…" : "Continue to validation" }} →</button></footer>
+          <footer class="uat-project-modal-footer"><button class="uat-button uat-button-secondary" type="button" @click="close">Cancel</button><PrimaryButton type="button" :disabled="!canContinue || validating" @click="continueToValidation">{{ validating ? "Validating…" : "Continue to validation" }} →</PrimaryButton></footer>
         </template>
 
         <template v-else>
@@ -182,7 +183,7 @@ function roleFound(role: Exclude<LogicalRole, "CONTEXT">): boolean {
             <aside class="uat-validation-sidebar"><article class="uat-validation-summary"><h3>Validation summary</h3><div><span><strong class="green">{{ session?.files.length || 0 }}</strong>files</span><span><strong :class="blockingFiles ? 'orange' : 'green'">{{ blockingFiles }}</strong>blocking errors</span><span><strong class="orange">{{ warningCount }}</strong>warnings</span></div></article><article class="uat-role-coverage"><h3>Role coverage</h3><p v-for="role in roleCoverage" :key="role[0]"><span>▤&nbsp; {{ role[1] }}</span><b>{{ roleFound(role[0]) ? "Found ✓" : "Missing !" }}</b></p></article><article v-if="centralDuplicates" class="uat-central-warning"><strong>△&nbsp; Central asset duplicates detected</strong><p>{{ centralAssetFiles.length }} centrally managed file(s) were excluded and will not override central assets.</p></article><article v-if="canCreate" class="uat-can-create"><strong>♢&nbsp; Project can be created</strong><p>All required roles are present and validation checks passed.</p></article><article v-else class="uat-central-warning"><strong>!&nbsp; Project cannot be created</strong><p>{{ validationReport?.errors.map((item) => item.message).join(" ") || session?.action_reasons.CREATE_PROJECT }}</p></article><p class="uat-create-note">ⓘ&nbsp;&nbsp; Create project freezes the source and creates v0.1.<br />&nbsp;&nbsp;&nbsp;&nbsp; AI discovery will not start automatically.</p></aside>
           </div>
           <p v-if="error" class="uat-inline-error validation-error">{{ error }}</p>
-          <footer class="uat-project-modal-footer validation-footer"><button class="uat-button uat-button-secondary" type="button" @click="step = 1">‹&nbsp; Back</button><span><i />{{ canCreate ? "Allowed by server validation" : session?.action_reasons.CREATE_PROJECT || "Create project is not allowed" }}</span><button class="uat-button uat-button-primary" type="button" :disabled="!canCreate" @click="createProject">{{ creating ? "Creating…" : "Create project" }} →</button></footer>
+          <footer class="uat-project-modal-footer validation-footer"><button class="uat-button uat-button-secondary" type="button" @click="step = 1">‹&nbsp; Back</button><span><i />{{ canCreate ? "Allowed by server validation" : session?.action_reasons.CREATE_PROJECT || "Create project is not allowed" }}</span><PrimaryButton type="button" :disabled="!canCreate" @click="createProject">{{ creating ? "Creating…" : "Create project" }} →</PrimaryButton></footer>
         </template>
       </section>
     </div>

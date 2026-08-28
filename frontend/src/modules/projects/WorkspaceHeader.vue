@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue"
+import PrimaryButton from "../../shared/ui/PrimaryButton.vue"
 import cdlLogo from "../../assets/cdl-logo.png"
 import type { AuthUser } from "../../shared/auth/auth-api"
 
@@ -55,10 +56,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", closeOnEscape))
     <div class="uat-topbar-actions">
       <span v-if="runningJobs" class="uat-environment"><i />{{ runningJobs }} job running</span>
       <span v-else class="uat-environment"><i />{{ environment }}</span>
-      <button v-if="showPrimary" class="uat-button uat-button-primary" type="button" @click="$emit('primary')">
+      <PrimaryButton v-if="showPrimary" type="button" @click="$emit('primary')">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
         {{ primaryLabel }}
-      </button>
+      </PrimaryButton>
       <button class="account-trigger" type="button" :aria-expanded="accountOpen" aria-controls="account-drawer" aria-label="Open account" @click="accountOpen = true">
         <img v-if="user.picture_url" :src="user.picture_url" alt="" referrerpolicy="no-referrer" />
         <span v-else>{{ initials }}</span>

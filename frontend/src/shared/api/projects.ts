@@ -4,7 +4,10 @@ import type {
   AuditProject,
   CandidateIssue,
   CreatedAuditProject,
+  CreateIssueInput,
+  IssuePage,
   OutputRevision,
+  UpdateIssueInput,
   ProjectEvent,
   ProjectVersion,
   SourceTree,
@@ -270,9 +273,38 @@ export function createProjectVersion(
   })
 }
 
-export function listVersionIssues(projectId: string, versionId: string): Promise<CandidateIssue[]> {
-  return request<CandidateIssue[]>(
+export async function listVersionIssues(projectId: string, versionId: string): Promise<CandidateIssue[]> {
+  const response = await request<CandidateIssue[] | IssuePage>(
     `/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/issues`,
+  )
+  return Array.isArray(response) ? response : response.items
+}
+
+export function getVersionIssue(projectId: string, versionId: string, issueId: string): Promise<CandidateIssue> {
+  return request<CandidateIssue>(
+    `/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/issues/${encodeURIComponent(issueId)}`,
+  )
+}
+
+export function createVersionIssue(projectId: string, versionId: string, input: CreateIssueInput): Promise<CandidateIssue> {
+  return request<CandidateIssue>(
+    `/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/issues`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": createIdempotencyKey("issue") },
+      body: JSON.stringify(input),
+    },
+  )
+}
+
+export function updateVersionIssue(projectId: string, versionId: string, issueId: string, issue: CandidateIssue, input: UpdateIssueInput): Promise<CandidateIssue> {
+  return request<CandidateIssue>(
+    `/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/issues/${encodeURIComponent(issueId)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...input, status: issue.status, evidence_refs: issue.evidence_refs || [], sop_refs: issue.sop_refs || [], confidence: issue.confidence, validation_flags: issue.validation_flags }),
+    },
   )
 }
 
