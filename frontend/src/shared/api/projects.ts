@@ -6,6 +6,7 @@ import type {
   CreatedAuditProject,
   CreateIssueInput,
   IssuePage,
+  JobEvent,
   OutputRevision,
   UpdateIssueInput,
   ProjectEvent,
@@ -370,7 +371,26 @@ export function startAuditJob(
 }
 
 export function retryAuditJob(jobId: string): Promise<AuditJob> {
-  return request<AuditJob>(`/jobs/${encodeURIComponent(jobId)}/retry`, { method: "POST" })
+  return request<AuditJob>(`/jobs/${encodeURIComponent(jobId)}/retry`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": crypto.randomUUID(),
+    },
+    body: JSON.stringify({ reason: "Retry requested from Runs & outputs" }),
+  })
+}
+
+export function listJobEvents(jobId: string, afterEventId = 0): Promise<JobEvent[]> {
+  return request<JobEvent[]>(
+    `/jobs/${encodeURIComponent(jobId)}/events?after_event_id=${afterEventId}`,
+  )
+}
+
+export function jobEventsUrl(jobId: string, afterEventId = 0): string {
+  return apiUrl(
+    `/jobs/${encodeURIComponent(jobId)}/events/stream?after_event_id=${afterEventId}`,
+  )
 }
 
 export function listVersionOutputs(projectId: string, versionId: string): Promise<OutputRevision[]> {

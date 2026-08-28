@@ -171,6 +171,17 @@ export interface AuditJob {
   error: string | null
 }
 
+export interface JobEvent {
+  event_id: number
+  job_id: string
+  stage: string
+  message: string
+  completed_items: number
+  total_items: number | null
+  warning: boolean
+  occurred_at: string
+}
+
 export interface ProjectVersion {
   version_id: string
   project_id: string

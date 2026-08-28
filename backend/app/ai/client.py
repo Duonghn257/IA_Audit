@@ -1,6 +1,7 @@
 """Shared Anthropic client wrapper, retry, and JSON extraction."""
 from __future__ import annotations
 
+import inspect
 import json
 import re
 import time
@@ -25,6 +26,24 @@ def make_client(cfg: Config) -> anthropic.Anthropic:
     if cfg.base_url:
         kwargs["base_url"] = cfg.base_url
     return anthropic.Anthropic(**kwargs)
+
+
+def _message_create_kwargs(
+    client: anthropic.Anthropic,
+    *,
+    temperature: float,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Include temperature only when the installed SDK supports it."""
+    parameters = inspect.signature(client.messages.create).parameters.values()
+    supports_temperature = any(
+        parameter.name == "temperature"
+        or parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters
+    )
+    if supports_temperature:
+        kwargs["temperature"] = temperature
+    return kwargs
 
 
 def _call_with_retry(
@@ -89,8 +108,10 @@ def call_json(
     """Send a messages.create call and parse a JSON response, with one retry on bad JSON."""
     messages = [{"role": "user", "content": user}]
     resp = _call_with_retry(
-        client, model=model, system=system, messages=messages,
-        max_tokens=max_tokens, temperature=temperature,
+        client, **_message_create_kwargs(
+            client, model=model, system=system, messages=messages,
+            max_tokens=max_tokens, temperature=temperature,
+        ),
     )
     text = _text_of(resp)
     try:
@@ -105,8 +126,10 @@ def call_json(
              "Respond with JSON only, inside a ```json fenced block."},
         ]
         resp = _call_with_retry(
-            client, model=model, system=system, messages=messages,
-            max_tokens=max_tokens, temperature=temperature,
+            client, **_message_create_kwargs(
+                client, model=model, system=system, messages=messages,
+                max_tokens=max_tokens, temperature=temperature,
+            ),
         )
         text = _text_of(resp)
         data = json.loads(_strip_fence(text))
