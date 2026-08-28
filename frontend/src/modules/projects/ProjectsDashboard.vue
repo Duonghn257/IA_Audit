@@ -79,9 +79,9 @@ function stageLabel(project: AuditProject): string {
               <i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5M9 13h6m-6 4h6" /></svg></i>
               <span><strong>{{ project.name }}</strong><small>Created {{ formatDate(project.created_at) }}</small></span>
             </span>
-            <strong role="cell">{{ project.version || "v0.1" }}</strong>
-            <span role="cell"><b class="uat-stage-badge" :class="dashboardStage(project)"><i />{{ stageLabel(project) }}</b></span>
-            <span role="cell">{{ formatDate(project.updated_at) }}</span>
+            <strong role="cell" data-label="Current version">{{ project.version || "v0.1" }}</strong>
+            <span role="cell" data-label="Stage"><b class="uat-stage-badge" :class="dashboardStage(project)"><i />{{ stageLabel(project) }}</b></span>
+            <span role="cell" data-label="Updated">{{ formatDate(project.updated_at) }}</span>
             <span role="cell" class="uat-row-arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></span>
           </button>
         </template>

@@ -213,6 +213,8 @@ export interface CandidateIssue {
   observed_gap: string
   title_hint: string | null
   evidence_summary: string | null
+  evidence_refs?: string[]
+  sop_refs?: string[]
   risk_category: string | null
   confidence: number | null
   validation_flags: string[]
@@ -220,6 +222,29 @@ export interface CandidateIssue {
   source_refs: SourceReference[]
   created_at: string
   updated_at: string
+}
+
+export interface IssuePage {
+  items: CandidateIssue[]
+  page: { next_cursor: string | null; has_more?: boolean }
+}
+
+export interface CreateIssueInput {
+  observed_gap: string
+  title_hint?: string | null
+  evidence_summary?: string | null
+  risk_category?: string | null
+  status?: IssueStatus
+  source_refs?: Omit<SourceReference, "reference_id">[]
+}
+
+export interface UpdateIssueInput {
+  row_version: number
+  title_hint: string | null
+  observed_gap: string
+  evidence_summary: string | null
+  risk_category: string | null
+  source_refs: Omit<SourceReference, "reference_id">[]
 }
 
 export interface OutputRevision {
