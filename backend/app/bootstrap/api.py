@@ -12,6 +12,11 @@ from app.api.errors import ApiError, api_error_handler
 from app.api.middleware import CorrelationIdMiddleware
 from app.api.router import api_v1_router
 from app.api.routes.auth import callback_alias_router
+from app.application.audit_execution_service import (
+    AuditExecutionService,
+    CentralAuditAssets,
+    PipelineRunner,
+)
 from app.application.audit_intake_service import AuditIntakeService
 from app.application.audit_workspace_service import AuditWorkspaceService
 from app.application.auth_service import AuthService
@@ -48,6 +53,8 @@ def create_app(
     project_manager: ProjectManager | None = None,
     audit_workspace_service: AuditWorkspaceService | None = None,
     audit_intake_service: AuditIntakeService | None = None,
+    audit_execution_service: AuditExecutionService | None = None,
+    audit_pipeline: PipelineRunner | None = None,
     discovery_service: DiscoveryService | None = None,
     discovery_engine: DiscoveryEngine | None = None,
     auth_service: AuthService | None = None,
@@ -118,6 +125,26 @@ def create_app(
     else:
         runtime_discovery_service = discovery_service
 
+    if audit_execution_service is None:
+        if database is None:
+            database = Database(runtime_settings.database_url)
+            database.create_schema()
+        runtime_audit_execution_service = AuditExecutionService(
+            SqlAlchemyAuditRepository(database.sessions),
+            LocalAuditIntakeStorage(
+                runtime_settings.storage_root / "uat-intake"
+            ),
+            pipeline=audit_pipeline,
+            assets=CentralAuditAssets(
+                guideline_path=runtime_settings.audit_guideline_path,
+                guideline_version=runtime_settings.audit_guideline_version,
+                template_path=runtime_settings.audit_template_path,
+                template_version=runtime_settings.audit_template_version,
+            ),
+        )
+    else:
+        runtime_audit_execution_service = audit_execution_service
+
     if database is None:
         database = Database(runtime_settings.database_url)
         database.create_schema()
@@ -163,6 +190,9 @@ def create_app(
         runtime_audit_intake_service
     )
     application.state.discovery_service = runtime_discovery_service
+    application.state.audit_execution_service = (
+        runtime_audit_execution_service
+    )
     application.state.auth_service = runtime_auth_service
     application.state.google_oauth_client = runtime_google_oauth_client
     application.state.database = database

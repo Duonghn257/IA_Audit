@@ -4,12 +4,16 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
+from fastapi.responses import FileResponse
 
-from app.api.audit_errors import audit_api_errors, feature_unavailable
+from app.api.audit_errors import audit_api_errors
 from app.api.dependencies import (
     CurrentPrincipalDependency,
+    get_audit_execution_service,
     get_audit_intake_service,
+    get_project_manager,
 )
+from app.api.errors import ApiError
 from app.api.schemas.upload_sessions import (
     CreateProjectFromUploadRequest,
     CreateProjectFromUploadResponse,
@@ -17,12 +21,21 @@ from app.api.schemas.upload_sessions import (
     UploadFileResponse,
     UploadSessionResponse,
 )
+from app.application.audit_execution_service import AuditExecutionService
 from app.application.audit_intake_service import (
     AuditIntakeService,
     UploadFileDescriptor,
 )
+from app.application.project_manager import ProjectManager
+from app.domain.projects import ProjectNotFoundError
 
 router = APIRouter(tags=["upload-sessions"])
+AuditExecutionDependency = Annotated[
+    AuditExecutionService, Depends(get_audit_execution_service)
+]
+ProjectManagerDependency = Annotated[
+    ProjectManager, Depends(get_project_manager)
+]
 AuditIntakeDependency = Annotated[
     AuditIntakeService,
     Depends(get_audit_intake_service),
@@ -152,9 +165,30 @@ def delete_upload_session(
 
 
 @router.get("/outputs/{output_id}/download", response_model=None)
-def download_output(output_id: str):
-    del output_id
-    raise feature_unavailable(
-        "S3_STORAGE_NOT_CONFIGURED",
-        "Versioned output download is not implemented yet.",
-    )
+def download_output(
+    output_id: str,
+    audit: AuditExecutionDependency,
+    manager: ProjectManagerDependency,
+    principal: CurrentPrincipalDependency,
+) -> FileResponse:
+    with audit_api_errors():
+        download = audit.get_output_download(output_id)
+        try:
+            manager.get(
+                download.project_id,
+                owner_user_id=principal.user.user_id,
+            )
+        except ProjectNotFoundError as exc:
+            raise ApiError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="OUTPUT_NOT_FOUND",
+                message=f"Output not found: {output_id}",
+            ) from exc
+        return FileResponse(
+            download.local_path,
+            media_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "wordprocessingml.document"
+            ),
+            filename=download.output.filename,
+        )

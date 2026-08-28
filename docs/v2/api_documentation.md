@@ -1,6 +1,6 @@
 # UAT API Contract — Operation Report Jedi
 
-> Contract version: `1.2.0-uat`
+> Contract version: `1.3.0-uat`
 > Base URL: `/api/v1`  
 > Content type mặc định: `application/json`
 > OpenAPI runtime: `/openapi.json`
@@ -135,7 +135,8 @@ Audit request phải gửi `issue_revision` để đóng băng đúng issue set.
 ### 2.6 Background command và idempotency
 
 Discovery, Audit, validate và retry không chờ xử lý hoàn tất. API trả `202`
-cùng job/session snapshot. Client poll hoặc dùng SSE để theo dõi.
+cùng job/session snapshot. Client ưu tiên SSE để theo dõi; endpoint events dạng
+JSON chỉ dùng làm polling fallback khi môi trường không duy trì được SSE.
 
 Với cùng scope và `Idempotency-Key`:
 
@@ -179,13 +180,13 @@ Với cùng scope và `Idempotency-Key`:
 | Status | Method | Path | Mục đích | Success |
 |---|---|---|---|---|
 | READY | `POST` | `/projects/{project_id}/versions/{version_id}/discovery-jobs` | Enqueue Discovery qua injectable AI adapter | `202 Job` |
-| STUB | `POST` | `/projects/{project_id}/versions/{version_id}/audit-jobs` | Freeze input và tạo Issue Log DOCX | `202 Job` |
+| READY | `POST` | `/projects/{project_id}/versions/{version_id}/audit-jobs` | Freeze input và tạo Issue Log DOCX | `202 Job` |
 | READY | `GET` | `/jobs/{job_id}` | Đọc job snapshot/progress | `200 Job` |
 | READY | `GET` | `/jobs/{job_id}/events` | Poll durable events | `200 JobEvent[]` |
 | READY | `GET` | `/jobs/{job_id}/events/stream` | Stream durable events bằng SSE | `200 text/event-stream` |
 | READY | `POST` | `/jobs/{job_id}/retry` | Retry job `FAILED`/`INCOMPLETE` an toàn | `202 Job` |
 | READY | `GET` | `/projects/{project_id}/versions/{version_id}/outputs` | List immutable output revisions | `200 OutputRevision[]` |
-| TARGET | `GET` | `/projects/{project_id}/versions/{version_id}/outputs/{output_id}/download` | Tải DOCX thuộc đúng project/version | `200 DOCX` hoặc `302` |
+| READY | `GET` | `/outputs/{output_id}/download` | Tải immutable DOCX output có ownership check | `200 DOCX` |
 
 ## 4. Shared data contracts
 
@@ -458,7 +459,7 @@ Job state: `QUEUED | RUNNING | SUCCEEDED | INCOMPLETE | FAILED`.
   "filename": "FY2026 Access Review_Issue Log v0.2.docx",
   "content_hash": "sha256:4cd8...",
   "created_at": "2026-08-21T10:00:00Z",
-  "download_url": "/api/v1/projects/prj_01J5.../versions/ver_01J5.../outputs/out_01J5.../download"
+  "download_url": "/api/v1/outputs/out_01J5.../download"
 }
 ```
 
@@ -915,7 +916,7 @@ frontend theo dõi trạng thái thống nhất.
 **Mục đích:** preflight, freeze issue input snapshot và enqueue draft/validate/
 render DOCX cho chính version hiện tại. Audit không tăng version.
 
-**Headers:** `Idempotency-Key` required.
+**Headers:** `Idempotency-Key` chưa bắt buộc trong runtime UAT; server deduplicate Audit bằng deterministic `input_hash`.
 
 **Input:**
 
@@ -925,20 +926,24 @@ render DOCX cho chính version hiện tại. Audit không tăng version.
 }
 ```
 
-Preflight tối thiểu:
+Preflight và freeze input:
 
-- request revision trùng current `issue_revision`;
-- không có Audit active tương đương;
-- issue được chọn cho output có `observed_gap`;
-- AI candidate có evidence summary, `EVIDENCE` ref và `CRITERIA` ref;
-- manual issue vẫn được phép thiếu refs theo UAT policy;
-- central guideline/template version đang active.
+- request revision phải trùng current `issue_revision`;
+- backend đọc issues trực tiếp từ selected audit version trong PostgreSQL;
+- `DRAFT`, `READY_FOR_REVIEW`, `APPROVED`, `NEEDS_EVIDENCE` được đưa vào output; `REJECTED` và `OUT_OF_SCOPE` bị loại;
+- phải còn ít nhất một candidate hợp lệ và mọi issue phải có `observed_gap`;
+- AI candidate phải có evidence summary, `EVIDENCE` refs và `CRITERIA`/SOP refs; manual issue vẫn được phép thiếu refs theo UAT policy;
+- toàn bộ issue payload, issue revision và central asset versions được đóng băng trong `audit_input_snapshots`;
+- input hash bao gồm frozen issues, immutable source hashes, central asset versions và pipeline version; request tương đương tái sử dụng job hiện có.
+
+Central assets có thể cấu hình bằng `AUDIT_GUIDELINE_PATH`, `AUDIT_GUIDELINE_VERSION`, `AUDIT_TEMPLATE_PATH`, `AUDIT_TEMPLATE_VERSION`; version được freeze theo từng run. Khi không cấu hình, renderer dùng builtin defaults.
+
+Worker materialize immutable AWP/APM/Process Understanding/Process SOP và chạy tám stage `PARSING → CONTEXT → CONSTRAINTS → DRAFTING → CRITIQUING → STYLING → VALIDATING → RENDERING`. Audit tạo output revision cho version hiện tại, không tạo audit version mới.
 
 **Output — `202 Job`:** `job_type = AUDIT`, state `QUEUED`.
 
 **Lỗi chính:** `404 VERSION_NOT_FOUND`, `409 ACTIVE_JOB_CONFLICT`,
-`409 INVALID_STATE`, `422 ISSUE_REVISION_STALE`,
-`422 AUDIT_PREFLIGHT_FAILED`, `501 AI_PIPELINE_NOT_IMPLEMENTED`.
+`409 INVALID_STATE`, `422 AUDIT_PREFLIGHT_FAILED`.
 
 ### 9.3 GET `/jobs/{job_id}`
 
@@ -965,8 +970,8 @@ Trả array rỗng khi chưa có event mới.
 
 **Mục đích:** real-time progress bằng Server-Sent Events.
 
-**Input:** query `after_event_id` hoặc header `Last-Event-ID`. Nếu cả hai có,
-query được ưu tiên.
+**Input:** query `after_event_id` integer `>= 0`, default `0`. Client giữ
+`event_id` lớn nhất đã nhận và truyền lại cursor này khi chủ động reconnect.
 
 **Output — `200 text/event-stream`:**
 
@@ -982,12 +987,24 @@ data: {}
 Server gửi heartbeat comment định kỳ. `end` chỉ được gửi khi job terminal và
 đã flush toàn bộ durable events.
 
+Luồng frontend chuẩn sau khi `POST .../audit-jobs` trả `202`:
+
+1. chỉ gửi command Audit một lần, sau đó mở một `EventSource` tới endpoint này;
+2. cập nhật stage, message và progress trên UI từ từng event `progress` mà không
+   reload versions/issues/outputs;
+3. khi nhận `end`, đóng stream rồi gọi `GET /jobs/{job_id}`, list versions và
+   list outputs đúng một lần để đồng bộ trạng thái terminal;
+4. nếu stream lỗi mạng, gọi `GET /jobs/{job_id}` một lần; nếu job còn active thì
+   reconnect với `after_event_id` cuối cùng, nếu terminal thì thực hiện final
+   refresh. Reconnect không được gửi lại `POST .../audit-jobs`.
+
 **Lỗi trước khi mở stream:** `404 JOB_NOT_FOUND`.
 
 ### 9.6 POST `/jobs/{job_id}/retry`
 
 **Mục đích:** retry job `FAILED` hoặc `INCOMPLETE` mà không tạo duplicate
-output/version.
+output/version. Với Audit job, retry luôn dùng lại frozen `audit_input_snapshot`;
+không đọc lại candidate issues đã bị chỉnh sửa sau lần enqueue đầu tiên.
 
 **Headers:** `Idempotency-Key` required.
 
@@ -1020,10 +1037,9 @@ có status `CURRENT`.
 
 **Lỗi chính:** `404 PROJECT_NOT_FOUND`, `404 VERSION_NOT_FOUND`.
 
-### 10.2 GET `/projects/{project_id}/versions/{version_id}/outputs/{output_id}/download`
+### 10.2 GET `/outputs/{output_id}/download`
 
-**Mục đích:** download đúng DOCX thuộc project/version trong URL. Nested path
-giúp authorization và audit log không dựa chỉ vào global `output_id`.
+**Mục đích:** download immutable DOCX theo opaque output ID. Backend resolve output về audit version/project và kiểm tra project ownership trước khi trả file.
 
 **Input:** path IDs; không có body.
 
@@ -1031,12 +1047,9 @@ giúp authorization và audit log không dựa chỉ vào global `output_id`.
 
 - `200` stream DOCX với
   `Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document`
-  và `Content-Disposition: attachment`; hoặc
-- `302` tới short-lived signed URL của private object storage.
+  và `Content-Disposition: attachment`.
 
-**Lỗi chính:** `404 PROJECT_NOT_FOUND`, `404 VERSION_NOT_FOUND`,
-`404 OUTPUT_NOT_FOUND`, `410 OUTPUT_EXPIRED`,
-`501 S3_STORAGE_NOT_CONFIGURED` trong runtime hiện tại.
+**Lỗi chính:** `404 OUTPUT_NOT_FOUND`. Runtime local trả `FileResponse`; adapter object storage có thể thay bằng signed URL trong production.
 
 ## 11. API bridge hiện tại và kế hoạch migration
 
@@ -1050,7 +1063,7 @@ thay đổi này vì sẽ làm hỏng browser flow đang chạy.
 | BRIDGE | `GET` | `/projects/{project_id}` | path ID | `200 ProjectBridge` | target ProjectDetail |
 | BRIDGE | `GET` | `/projects/{project_id}/events` | `after_event_id` | `200 ProjectEventBridge[]` | `/jobs/{job_id}/events` |
 | BRIDGE | `GET` | `/projects/{project_id}/events/stream` | `after_event_id` | SSE progress | `/jobs/{job_id}/events/stream` |
-| BRIDGE | `GET` | `/projects/{project_id}/output` | path ID | DOCX hoặc `409/410` | nested version output download |
+| BRIDGE | `GET` | `/projects/{project_id}/output` | path ID | DOCX hoặc `409/410` | `/outputs/{output_id}/download` |
 
 Current `ProjectBridge` response:
 
@@ -1081,18 +1094,17 @@ Bridge retirement conditions:
 1. frontend tích hợp upload-session local flow và bỏ bridge upload;
 2. promote tạo project + `v0.1`;
 3. frontend chuyển sang explicit discovery/Audit jobs;
-4. frontend tải output theo project/version/output ID;
+4. frontend tải output bằng opaque output ID;
 5. UAT regression cho upload → review → Audit → download pass.
 
 ### 11.1 Runtime-only endpoints đang chờ migration
 
-Hai path dưới đây vẫn xuất hiện trong OpenAPI runtime nhưng không thuộc
+Path dưới đây vẫn xuất hiện trong OpenAPI runtime nhưng chưa thuộc
 contract đích:
 
 | Method | Path | Input hiện tại | Output hiện tại | Migration |
 |---|---|---|---|---|
 | `PUT` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}` | Full payload gồm `row_version`, `observed_gap`, `title_hint`, `evidence_summary`, `risk_category`, `status`, `confidence`, `validation_flags`, `source_refs` | `200 Issue` | Thay bằng partial `PATCH`; system-owned fields không cho client ghi |
-| `GET` | `/outputs/{output_id}/download` | Path `output_id` | Hiện trả `501 S3_STORAGE_NOT_CONFIGURED` | Thay bằng nested project/version/output path |
 
 Payload đầy đủ của `PUT issue` hiện tại:
 
@@ -1138,14 +1150,13 @@ không phải public HTTP contract và vẫn được giữ.
 | Issue update | `PUT`, full editable payload | `PATCH`, partial business fields |
 | Disposition comment | Chưa có | Optional `comment` và audit trail |
 | Discovery | Durable `202 Job`; adapter mặc định fail có kiểm soát khi AI chưa cấu hình | Inject AI engine production |
-| Audit | Route trả `501 AI_PIPELINE_NOT_IMPLEMENTED` | Durable `202 Job` |
+| Audit | Durable `202 Job`, frozen DB candidates, local background worker chạy pipeline 8 stage | Tách worker process/queue cho production |
 | Retry | `202` cho `FAILED`/`INCOMPLETE`, lưu retry reason | Bổ sung idempotency-key persistence |
-| Output download | Global `/outputs/{output_id}/download`, trả `501` | Nested project/version path |
+| Output download | Global `/outputs/{output_id}/download` trả local `FileResponse` có ownership check | Private S3/signed URL hoặc nested authorization route |
 | Idempotency | Chưa enforce đồng đều | Required cho command endpoint |
 | UAT limits | Đã enforce 20 files và 100,000,000 bytes | Giữ cấu hình tương đương trên S3 |
 
-Không coi route `501` là feature đã hoàn thành. Swagger chỉ chứng minh contract
-đã publish, không chứng minh luồng UAT end-to-end đã sẵn sàng.
+Audit/output đã chạy end-to-end qua local adapter. UAT sign-off vẫn cần Anthropic, central assets và dataset thực tế; production còn cần worker tách process và private object storage.
 
 ## 13. Mã lỗi nghiệp vụ
 
@@ -1171,7 +1182,4 @@ Không coi route `501` là feature đã hoàn thành. Swagger chỉ chứng minh
 | 422 | `SESSION_NOT_READY` | Promote trước khi validation pass |
 | 422 | `INVALID_ISSUE` | Issue business fields không hợp lệ |
 | 422 | `INVALID_DISPOSITION` | Review status/transition không hợp lệ |
-| 422 | `ISSUE_REVISION_STALE` | Audit submit bằng revision cũ |
-| 422 | `AUDIT_PREFLIGHT_FAILED` | Issue/source/asset chưa đủ để Audit |
-| 501 | `S3_STORAGE_NOT_CONFIGURED` | Capability cần object storage chưa sẵn sàng |
-| 501 | `AI_PIPELINE_NOT_IMPLEMENTED` | Discovery/Audit worker chưa implement |
+| 422 | `AUDIT_PREFLIGHT_FAILED` | Candidate rỗng/không hợp lệ hoặc `issue_revision` cũ |

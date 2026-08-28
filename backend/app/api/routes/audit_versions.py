@@ -5,9 +5,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 
-from app.api.audit_errors import audit_api_errors, feature_unavailable
+from app.api.audit_errors import audit_api_errors
 from app.api.dependencies import (
     CurrentPrincipalDependency,
+    get_audit_execution_service,
     get_audit_workspace_service,
     get_discovery_service,
 )
@@ -24,11 +25,15 @@ from app.api.schemas.audit_jobs import (
     StartDiscoveryRequest,
 )
 from app.api.schemas.audit_versions import CreateVersionRequest, ProjectVersionResponse
+from app.application.audit_execution_service import AuditExecutionService
 from app.application.audit_workspace_service import AuditWorkspaceService
 from app.application.discovery_service import DiscoveryService
 
 router = APIRouter(prefix="/projects/{project_id}/versions", tags=["audit-workspace"])
 AuditServiceDependency = Annotated[AuditWorkspaceService, Depends(get_audit_workspace_service)]
+AuditExecutionDependency = Annotated[
+    AuditExecutionService, Depends(get_audit_execution_service)
+]
 DiscoveryServiceDependency = Annotated[
     DiscoveryService, Depends(get_discovery_service)
 ]
@@ -203,24 +208,29 @@ def start_discovery(
     "/{version_id}/audit-jobs",
     response_model=JobResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    responses={501: {"description": "AI audit worker is not implemented"}},
 )
 def start_audit(
     project_id: str,
     version_id: str,
     request: StartAuditRequest,
+    background_tasks: BackgroundTasks,
+    http_request: Request,
     service: AuditServiceDependency,
+    audit: AuditExecutionDependency,
 ) -> JobResponse:
     with audit_api_errors():
-        workspace = service.get_version(project_id, version_id)
-        if workspace.version.issue_revision != request.issue_revision:
-            raise ValueError(
-                "issue_revision is stale; reload the version before starting an audit."
+        service.get_version(project_id, version_id)
+        started = audit.start_audit(
+            project_id,
+            version_id,
+            issue_revision=request.issue_revision,
+            correlation_id=http_request.state.correlation_id,
+        )
+        if started.scheduled:
+            background_tasks.add_task(
+                audit.run_audit, started.job.job_id
             )
-    raise feature_unavailable(
-        "AI_PIPELINE_NOT_IMPLEMENTED",
-        "AI audit execution and DOCX generation are not implemented in the MVP yet.",
-    )
+        return JobResponse.from_domain(started.job)
 
 
 @router.get("/{version_id}/outputs", response_model=list[OutputRevisionResponse])

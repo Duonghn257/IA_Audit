@@ -28,6 +28,10 @@ class AuditJobNotFoundError(KeyError):
     """Raised when a durable job does not exist."""
 
 
+class AuditOutputNotFoundError(KeyError):
+    """Raised when a generated output revision does not exist."""
+
+
 class DuplicateProjectNameError(ValueError):
     """Raised when a project name is already in use."""
 
@@ -50,6 +54,10 @@ class JobNotRetryableError(RuntimeError):
 
 class SourceNotReadyError(ValueError):
     """Raised when immutable source cannot satisfy discovery input."""
+
+
+class AuditPreflightError(ValueError):
+    """Raised when an Audit job cannot freeze a valid issue input."""
 
 
 class UploadSessionState(StrEnum):

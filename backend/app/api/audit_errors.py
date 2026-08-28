@@ -11,6 +11,8 @@ from app.domain.audit import (
     ActiveJobConflictError,
     AuditIssueNotFoundError,
     AuditJobNotFoundError,
+    AuditPreflightError,
+    AuditOutputNotFoundError,
     AuditProjectNotFoundError,
     AuditStateError,
     AuditVersionNotFoundError,
@@ -43,6 +45,8 @@ def audit_api_errors() -> Iterator[None]:
         raise _not_found("ISSUE_NOT_FOUND", "Issue", exc) from exc
     except AuditJobNotFoundError as exc:
         raise _not_found("JOB_NOT_FOUND", "Job", exc) from exc
+    except AuditOutputNotFoundError as exc:
+        raise _not_found("OUTPUT_NOT_FOUND", "Output", exc) from exc
     except VersionConflictError as exc:
         raise ApiError(
             status_code=status.HTTP_409_CONFLICT,
@@ -70,6 +74,12 @@ def audit_api_errors() -> Iterator[None]:
                 "Only FAILED or INCOMPLETE jobs can be retried."
             ),
             details={"job_id": _error_value(exc)},
+        ) from exc
+    except AuditPreflightError as exc:
+        raise ApiError(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            code="AUDIT_PREFLIGHT_FAILED",
+            message=str(exc),
         ) from exc
     except SourceNotReadyError as exc:
         raise ApiError(

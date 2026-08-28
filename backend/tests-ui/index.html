@@ -61,7 +61,7 @@
   </div>
 
   <script>
-    const state={csrf:'',user:null,authEnabled:false,files:[],ignoredFiles:[],selectionValid:false,uploadSession:null,validation:null,busy:false,projects:[],currentProject:null,currentVersion:null,currentJob:null,issues:[],versions:[],outputs:[],activeTab:'source',detailBusy:false,jobPollTimer:null};
+    const state={csrf:'',user:null,authEnabled:false,files:[],ignoredFiles:[],selectionValid:false,uploadSession:null,validation:null,busy:false,projects:[],currentProject:null,currentVersion:null,currentJob:null,issues:[],versions:[],outputs:[],activeTab:'source',detailBusy:false,jobPollTimer:null,jobEventSource:null};
     const requiredFolders=['AWP','APM','Process SOP','Process Understanding'];
     const supportedExtensions=['.docx','.pdf','.xlsx'];
     const $=id=>document.getElementById(id);
@@ -107,7 +107,7 @@
         row.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open()}};
       });
     }
-    function stopJobPolling(){if(state.jobPollTimer){clearTimeout(state.jobPollTimer);state.jobPollTimer=null}}
+    function stopJobPolling(){if(state.jobPollTimer){clearTimeout(state.jobPollTimer);state.jobPollTimer=null}if(state.jobEventSource){state.jobEventSource.close();state.jobEventSource=null}}
     async function openProject(projectId){
       stopJobPolling();
       state.currentProject=state.projects.find(project=>project.project_id===projectId)||null;
@@ -140,6 +140,8 @@
       renderDetailChrome();
       switchDetailTab(state.activeTab);
       if(state.currentJob&&['QUEUED','RUNNING'].includes(state.currentJob.state))pollDiscoveryJob(state.currentJob.job_id);
+      const auditJob=version.latest_job?.job_type==='AUDIT'?version.latest_job:null;
+      if(auditJob&&['QUEUED','RUNNING'].includes(auditJob.state))streamAuditJob(auditJob.job_id,versionId);
     }
     function versionOutputLabel(version){
       if(!version.output_available)return'No output';
@@ -215,9 +217,37 @@
       if(state.detailBusy)return;
       state.detailBusy=true;
       try{
-        await api(`/projects/${state.currentProject.project_id}/versions/${state.currentVersion.version_id}/audit-jobs`,{method:'POST',body:JSON.stringify({issue_revision:state.currentVersion.issue_revision})});
-        state.activeTab='runs';await loadAuditVersion(state.currentVersion.version_id);
+        const versionId=state.currentVersion.version_id;
+        await api(`/projects/${state.currentProject.project_id}/versions/${versionId}/audit-jobs`,{method:'POST',body:JSON.stringify({issue_revision:state.currentVersion.issue_revision})});
+        state.activeTab='runs';
+        state.versions=await api(`/projects/${state.currentProject.project_id}/versions`);
+        await loadAuditVersion(versionId);
       }catch(error){alert(error.message)}finally{state.detailBusy=false}
+    }
+    function streamAuditJob(jobId,versionId,afterEventId=0){
+      stopJobPolling();
+      let cursor=afterEventId;
+      const source=new EventSource(`/api/v1/jobs/${jobId}/events/stream?after_event_id=${afterEventId}`,{withCredentials:true});
+      state.jobEventSource=source;
+      source.addEventListener('progress',message=>{
+        if(state.currentVersion?.version_id!==versionId)return;
+        const event=JSON.parse(message.data);cursor=Number(message.lastEventId)||event.event_id;
+        const current=state.currentVersion.latest_job;if(!current||current.job_id!==jobId)return;
+        const updated={...current,state:event.stage==='FAILED'?'FAILED':'RUNNING',stage:event.stage,current_message:event.message,completed_items:event.completed_items,total_items:event.total_items,updated_at:event.occurred_at,error:event.stage==='FAILED'?event.message:null};
+        state.currentVersion={...state.currentVersion,latest_job:updated};
+        state.versions=state.versions.map(item=>item.version_id===versionId?state.currentVersion:item);
+        renderDetailChrome();if(state.activeTab==='runs')renderRunsOutputs();
+      });
+      source.addEventListener('end',()=>{source.close();if(state.jobEventSource===source)state.jobEventSource=null;refreshAuditJobFinal(jobId,versionId)});
+      source.onerror=()=>{source.close();if(state.jobEventSource===source)state.jobEventSource=null;state.jobPollTimer=setTimeout(()=>recoverAuditStream(jobId,versionId,cursor),2500)};
+    }
+    async function recoverAuditStream(jobId,versionId,afterEventId){
+      if(!state.currentProject||state.currentVersion?.version_id!==versionId)return;
+      try{const job=await api(`/jobs/${jobId}`);if(['QUEUED','RUNNING'].includes(job.state))streamAuditJob(jobId,versionId,afterEventId);else await refreshAuditJobFinal(jobId,versionId)}catch(error){console.error(error);state.jobPollTimer=setTimeout(()=>recoverAuditStream(jobId,versionId,afterEventId),2500)}
+    }
+    async function refreshAuditJobFinal(jobId,versionId){
+      if(!state.currentProject||state.currentVersion?.version_id!==versionId)return;
+      try{await api(`/jobs/${jobId}`);state.versions=await api(`/projects/${state.currentProject.project_id}/versions`);await loadAuditVersion(versionId)}catch(error){console.error(error)}
     }
     function renderRunsOutputs(){
       const latest=state.currentVersion?.latest_job;

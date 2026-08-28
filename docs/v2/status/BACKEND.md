@@ -1,6 +1,6 @@
 # Trạng thái Backend
 
-> Xác minh gần nhất: 21/08/2026
+> Xác minh gần nhất: 27/08/2026
 > Trạng thái bàn giao: POC đã triển khai
 > Source of truth: `backend/app/`
 
@@ -37,7 +37,8 @@ DOCX trong `app/documents`, còn context/retrieval boundary trong `app/rag`.
 | SSE progress và heartbeat | Đã xong | `api/routes/projects.py` |
 | Structured API errors | Đã xong | `api/errors.py`, correlation middleware |
 | Audit pipeline tám bước | Đã xong | `application/audit_pipeline.py` |
-| DOCX output download | Đã xong | Project output endpoint |
+| DOCX output download | Đã xong | Versioned `/outputs/{output_id}/download` |
+| Versioned Audit job từ DB candidates | Đã xong cho UAT local worker | `audit_execution_service.py`, frozen input snapshot, output revisions |
 | PostgreSQL support | Đã xong | SQLAlchemy + psycopg |
 | SQLite local fallback | Đã xong | Local development/tests |
 | Alembic migration | Đã xong | Head `20260812_02` |
@@ -120,12 +121,12 @@ roadmap item.
 
 | Kiểm tra | Kết quả |
 |---|---|
-| Backend automated tests | 19 passed |
+| Backend automated tests | 32 passed |
 | Import/compile check | Pass |
 | Live Lumina Grand CLI pipeline | Hoàn thành 8/8 stages |
 | Generated DOCX | Hợp lệ và mở được |
 | API container health | Healthy |
-| Alembic current | `20260812_02 (head)` |
+| Alembic current | `20260827_05 (head)` |
 | Alembic schema drift check | Pass |
 
 Default tests không gọi live LLM:
@@ -138,7 +139,7 @@ pytest
 ## Giới hạn hiện tại
 
 - Restart API có thể để project `PROCESSING` bị treo.
-- Pipeline chưa có durable checkpoint/resume theo stage.
+- Pipeline chưa có durable checkpoint/resume theo stage; Audit retry chạy lại từ frozen input snapshot.
 - Local thread execution không phù hợp nhiều API replicas.
 - Chưa có project ownership, authentication hoặc authorization.
 - Upload-session mới enforce DOCX/PDF/XLSX, tối đa 20 files và 100 MB;

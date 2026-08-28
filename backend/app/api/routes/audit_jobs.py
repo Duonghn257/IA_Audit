@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from app.api.audit_errors import audit_api_errors
 from app.api.dependencies import (
     CurrentPrincipalDependency,
+    get_audit_execution_service,
     get_audit_workspace_service,
     get_discovery_service,
     get_project_manager,
@@ -23,6 +24,7 @@ from app.api.schemas.audit_jobs import (
     JobResponse,
     RetryJobRequest,
 )
+from app.application.audit_execution_service import AuditExecutionService
 from app.application.audit_workspace_service import AuditWorkspaceService
 from app.application.discovery_service import DiscoveryService
 from app.application.project_manager import ProjectManager
@@ -34,6 +36,9 @@ AuditServiceDependency = Annotated[
     AuditWorkspaceService, Depends(get_audit_workspace_service)
 ]
 ProjectManagerDependency = Annotated[ProjectManager, Depends(get_project_manager)]
+AuditExecutionDependency = Annotated[
+    AuditExecutionService, Depends(get_audit_execution_service)
+]
 DiscoveryServiceDependency = Annotated[DiscoveryService, Depends(get_discovery_service)]
 
 
@@ -95,6 +100,7 @@ def retry_job(
     manager: ProjectManagerDependency,
     principal: CurrentPrincipalDependency,
     discovery: DiscoveryServiceDependency,
+    audit: AuditExecutionDependency,
     request: RetryJobRequest | None = None,
 ) -> JobResponse:
     reason = request.reason if request else None
@@ -106,7 +112,9 @@ def retry_job(
             started = discovery.retry_discovery(job_id, reason=reason)
             background_tasks.add_task(discovery.run_discovery, started.job.job_id)
             return JobResponse.from_domain(started.job)
-        return JobResponse.from_domain(service.retry_job(job_id, reason=reason))
+        started = audit.retry_audit(job_id, reason=reason)
+        background_tasks.add_task(audit.run_audit, started.job.job_id)
+        return JobResponse.from_domain(started.job)
 
 
 def _get_owned_job_or_404(

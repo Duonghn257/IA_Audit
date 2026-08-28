@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.domain.audit import (
     AuditInputSnapshotRecord,
+    AuditOutputNotFoundError,
     AuditStateError,
     AuditVersionNotFoundError,
     AuditVersionState,
@@ -59,6 +60,24 @@ class SqlAlchemyAuditJobRepository:
     def get_job(self, job_id: str) -> JobRecord:
         with self._sessions() as session:
             return to_job_record(get_job(session, job_id))
+
+    def get_audit_input_snapshot(
+        self, job_id: str
+    ) -> AuditInputSnapshotRecord:
+        with self._sessions() as session:
+            job = get_job(session, job_id)
+            if not job.input_snapshot_id:
+                raise AuditStateError(
+                    f"Job {job_id} does not have a frozen audit input."
+                )
+            snapshot = session.get(
+                AuditInputSnapshotModel, job.input_snapshot_id
+            )
+            if snapshot is None:
+                raise AuditStateError(
+                    f"Audit input snapshot is missing for job {job_id}."
+                )
+            return to_snapshot_record(snapshot, job_id)
 
     def list_jobs_for_version(self, version_id: str) -> list[JobRecord]:
         with self._sessions() as session:
@@ -335,7 +354,21 @@ class SqlAlchemyAuditJobRepository:
                 project.status = ProjectState.CANDIDATES_AVAILABLE.value
                 project.updated_at = now
             elif job.job_type == JobType.AUDIT.value and state != JobState.SUCCEEDED:
-                version.state = version_state_from_outputs(session, version.version_id).value
+                restored = version_state_from_outputs(
+                    session, version.version_id
+                )
+                if restored == AuditVersionState.DRAFT:
+                    issue_count = session.scalar(
+                        select(func.count())
+                        .select_from(IssueModel)
+                        .where(
+                            IssueModel.project_version_id
+                            == version.version_id
+                        )
+                    )
+                    if issue_count:
+                        restored = AuditVersionState.CANDIDATES_READY
+                version.state = restored.value
             version.updated_at = now
         return to_job_record(job)
 
@@ -378,6 +411,13 @@ class SqlAlchemyAuditJobRepository:
                 created_at=now,
             )
             job.state = JobState.SUCCEEDED.value
+            job.stage = "COMPLETE"
+            job.current_message = f"Published {filename}"
+            job.completed_items = 8
+            job.total_items = 8
+            job.error = None
+            job.lease_owner = None
+            job.lease_expires_at = None
             job.updated_at = now
             version.state = AuditVersionState.DOCX_READY.value
             version.updated_at = now
@@ -433,6 +473,16 @@ class SqlAlchemyAuditJobRepository:
                 version.state = AuditVersionState.AUDITING.value
                 version.updated_at = now
         return to_job_record(job)
+
+    def get_output_revision(
+        self, output_id: str
+    ) -> tuple[OutputRevisionRecord, str]:
+        with self._sessions() as session:
+            output = session.get(OutputRevisionModel, output_id)
+            if output is None:
+                raise AuditOutputNotFoundError(output_id)
+            version = get_version(session, output.project_version_id)
+            return to_output_record(output), version.project_id
 
     def list_output_revisions(self, version_id: str) -> list[OutputRevisionRecord]:
         with self._sessions() as session:

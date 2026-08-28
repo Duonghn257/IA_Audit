@@ -10,6 +10,7 @@ from typing import Annotated
 from fastapi import Depends, Request, status
 
 from app.api.errors import ApiError
+from app.application.audit_execution_service import AuditExecutionService
 from app.application.audit_intake_service import AuditIntakeService
 from app.application.audit_workspace_service import AuditWorkspaceService
 from app.application.auth_service import AuthService
@@ -144,6 +145,12 @@ def get_audit_workspace_service(request: Request) -> AuditWorkspaceService:
 
 def get_discovery_service(request: Request) -> DiscoveryService:
     return request.app.state.discovery_service
+
+
+def get_audit_execution_service(
+    request: Request,
+) -> AuditExecutionService:
+    return request.app.state.audit_execution_service
 
 
 SettingsDependency = Annotated[ApiSettings, Depends(get_settings)]

@@ -28,7 +28,10 @@ def test_openapi_publishes_v2_workspace_contract(tmp_path: Path) -> None:
         "get",
         "post",
     }
-    assert "post" in paths["/api/v1/projects/{project_id}/versions/{version_id}/audit-jobs"]
+    audit_operation = paths[
+        "/api/v1/projects/{project_id}/versions/{version_id}/audit-jobs"
+    ]["post"]
+    assert "501" not in audit_operation["responses"]
     assert "get" in paths["/api/v1/jobs/{job_id}/events/stream"]
     assert "get" in paths["/api/v1/auth/google/login"]
     assert "get" in paths["/api/v1/auth/google/callback"]

@@ -106,6 +106,41 @@ class LocalAuditIntakeStorage:
             if materialized != path:
                 materialized.unlink(missing_ok=True)
 
+    def put_output(self, source: Path, object_key: str) -> StoredUpload:
+        source = source.resolve()
+        if not source.is_file():
+            raise FileNotFoundError(source)
+        destination = self._object_path(object_key)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(
+            f".{destination.name}.{uuid4().hex}.uploading"
+        )
+        digest = hashlib.sha256()
+        size = 0
+        try:
+            with (
+                source.open("rb") as input_file,
+                temporary.open("wb") as target,
+            ):
+                while chunk := input_file.read(1024 * 1024):
+                    size += len(chunk)
+                    digest.update(chunk)
+                    target.write(chunk)
+            os.replace(temporary, destination)
+        except Exception:
+            temporary.unlink(missing_ok=True)
+            raise
+        return StoredUpload(
+            size_bytes=size,
+            content_hash=f"sha256:{digest.hexdigest()}",
+        )
+
+    def path_for_download(self, object_key: str) -> Path:
+        path = self._object_path(object_key)
+        if not path.is_file():
+            raise FileNotFoundError(object_key)
+        return path
+
     def promote_uploads(
         self,
         session_id: str,

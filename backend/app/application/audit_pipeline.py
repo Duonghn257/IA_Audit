@@ -30,7 +30,11 @@ class PipelineInputError(ValueError):
 @dataclass(frozen=True)
 class PipelineRequest:
     project_path: Path
-    issues_path: Path
+    issues_path: Path | None = None
+    auditor_input: Any | None = None
+    version: str | None = None
+    run_directory: Path | None = None
+    project_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -102,20 +106,41 @@ class AuditPipeline:
         reporter: ProgressReporter | None = None,
     ) -> PipelineResult:
         project_path = request.project_path.resolve()
-        issues_path = request.issues_path.resolve()
-
         if not project_path.is_dir():
             raise PipelineInputError(
                 f"--project {project_path} is not a directory"
             )
-        if not issues_path.is_file():
-            raise PipelineInputError(f"--issues {issues_path} is not a file")
+        if request.auditor_input is not None:
+            auditor_input = request.auditor_input
+        elif request.issues_path is not None:
+            issues_path = request.issues_path.resolve()
+            if not issues_path.is_file():
+                raise PipelineInputError(
+                    f"--issues {issues_path} is not a file"
+                )
+            auditor_input = _read_auditor_input(issues_path)
+        else:
+            raise PipelineInputError(
+                "Pipeline requires auditor_input or an --issues JSON file"
+            )
+        if not isinstance(auditor_input, list):
+            raise PipelineInputError("Auditor input must be a JSON array")
 
-        auditor_input = _read_auditor_input(issues_path)
         config = load_config()
         client = make_client(config)
-        version, run_directory = next_version(project_path)
-        project_name = _project_display_name(project_path)
+        if request.version is None:
+            version, run_directory = next_version(project_path)
+        else:
+            if request.run_directory is None:
+                raise PipelineInputError(
+                    "run_directory is required with an external version"
+                )
+            version = request.version
+            run_directory = request.run_directory.resolve()
+            run_directory.mkdir(parents=True, exist_ok=False)
+        project_name = request.project_name or _project_display_name(
+            project_path
+        )
 
         log_path = run_directory / "run.log"
         with log_path.open("w", encoding="utf-8") as log:

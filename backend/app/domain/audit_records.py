@@ -197,6 +197,8 @@ class AuditInputSnapshotRecord:
     job_id: str
     issue_revision: int
     input_hash: str
+    issue_payload: dict[str, Any]
+    central_asset_versions: dict[str, Any]
     created_at: datetime
 
 

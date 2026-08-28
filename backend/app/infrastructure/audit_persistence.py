@@ -297,7 +297,16 @@ def to_job_event_record(model: JobEventModel) -> JobEventRecord:
 
 
 def to_snapshot_record(model: AuditInputSnapshotModel, job_id: str) -> AuditInputSnapshotRecord:
-    return AuditInputSnapshotRecord(model.snapshot_id, model.project_version_id, job_id, model.issue_revision, model.input_hash, as_utc(model.created_at))
+    return AuditInputSnapshotRecord(
+        model.snapshot_id,
+        model.project_version_id,
+        job_id,
+        model.issue_revision,
+        model.input_hash,
+        dict(model.issue_payload),
+        dict(model.central_asset_versions),
+        as_utc(model.created_at),
+    )
 
 
 def to_output_record(model: OutputRevisionModel) -> OutputRevisionRecord:
