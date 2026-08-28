@@ -3,62 +3,112 @@ import { computed } from "vue"
 import PrimaryButton from "../../shared/ui/PrimaryButton.vue"
 
 import { formatDate } from "../../shared/formatting/date"
-import type { AuditJob, OutputRevision } from "../../shared/types/projects"
+import type { AuditJob, JobEvent, OutputRevision } from "../../shared/types/projects"
 
 const props = defineProps<{
   jobs: AuditJob[]
   outputs: OutputRevision[]
+  events: JobEvent[]
   projectName: string
   versionLabel: string
 }>()
 
-defineEmits<{
-  download: [output: OutputRevision | null]
+const emit = defineEmits<{
+  download: [output: OutputRevision]
+  retry: [job: AuditJob]
 }>()
 
-const displayRuns = computed(() => props.jobs.length ? props.jobs : [
-  { job_id: "demo-audit", job_type: "AUDIT", state: "SUCCEEDED", updated_at: "2026-08-24T11:19:00Z", stage: "Drafting · Validation · Rendering" },
-  { job_id: "demo-discovery", job_type: "DISCOVERY", state: "SUCCEEDED", updated_at: "2026-08-24T10:32:00Z", stage: "Parsing · Discovery · Validation" },
-] as const)
+const stages = ["PARSING", "CONTEXT", "CONSTRAINTS", "DRAFTING", "CRITIQUING", "STYLING", "VALIDATING", "RENDERING"] as const
+const displayJobs = computed(() => props.jobs)
+const activeJob = computed(() => displayJobs.value.find((job) => job.job_type === "AUDIT" && ["QUEUED", "RUNNING"].includes(job.state)) || null)
+const currentOutput = computed(() => props.outputs.find((output) => output.status === "CURRENT") || props.outputs[0] || null)
+const activeStageIndex = computed(() => activeJob.value?.stage ? stages.indexOf(activeJob.value.stage as typeof stages[number]) : -1)
+const progressPercent = computed(() => {
+  if (!activeJob.value) return 0
+  return Math.min(100, Math.round((activeJob.value.completed_items / Math.max(activeJob.value.total_items || stages.length, 1)) * 100))
+})
+const latestMessage = computed(() => props.events.at(-1)?.message || activeJob.value?.current_message || "Audit is queued and will start shortly.")
 
-const displayOutputs = computed(() => props.outputs.length ? props.outputs : [
-  { output_id: "demo-r2", project_version_id: "demo", ordinal: 2, status: "CURRENT", filename: `${props.projectName.replaceAll(" ", "_")}_Issue Log ${props.versionLabel}.docx`, content_hash: "", created_at: "2026-08-24T11:19:00Z", download_url: "" },
-  { output_id: "demo-r1", project_version_id: "demo", ordinal: 1, status: "STALE", filename: "Revision 1", content_hash: "", created_at: "2026-08-23T11:19:00Z", download_url: "" },
-] satisfies OutputRevision[])
-
-function runTitle(job: (typeof displayRuns.value)[number]): string {
+function runTitle(job: AuditJob): string {
   return job.job_type === "AUDIT" ? "Audit run" : "Discovery run"
+}
+
+function runSummary(job: AuditJob): string {
+  if (["FAILED", "INCOMPLETE"].includes(job.state)) return job.error || job.current_message || "The run did not complete"
+  if (["QUEUED", "RUNNING"].includes(job.state)) return job.current_message || job.stage || "Preparing"
+  return job.job_type === "AUDIT"
+    ? "Drafting · Validation · Rendering"
+    : "Parsing · Discovery · Validation"
+}
+
+function outputTitle(output: OutputRevision): string {
+  return output.status === "CURRENT" ? output.filename : `Revision ${output.ordinal}`
+}
+
+function stateLabel(job: AuditJob): string {
+  return job.state.replaceAll("_", " ").toLowerCase().replace(/^./, (letter) => letter.toUpperCase())
+}
+
+function stageState(index: number): "done" | "active" | "pending" {
+  if (index < activeStageIndex.value) return "done"
+  if (index === activeStageIndex.value) return "active"
+  return "pending"
 }
 </script>
 
 <template>
   <section class="uat-runs-tab">
-    <article class="uat-output-ready">
-      <span>✓</span>
-      <div><h2>Draft issue log is ready</h2><p>Generated from the approved {{ versionLabel }} issue snapshot.</p></div>
-      <PrimaryButton type="button" @click="$emit('download', outputs[0] || null)">⇩&nbsp; Download DOCX</PrimaryButton>
+    <article v-if="activeJob" class="uat-discovery-progress uat-run-progress" aria-live="polite">
+      <header class="uat-discovery-progress-header">
+        <h2>Running audit</h2>
+        <div><span>{{ latestMessage }}</span><i /><span>Correlation ID:&nbsp; {{ activeJob.correlation_id }}</span></div>
+      </header>
+      <div class="uat-progress-steps uat-audit-progress-steps">
+        <template v-for="(stage, index) in stages" :key="stage">
+          <div :class="stageState(index)">
+            <b>{{ stageState(index) === "done" ? "✓" : stageState(index) === "active" ? "↻" : index + 1 }}</b>
+            <span><strong>{{ stage.replaceAll("_", " ") }}</strong><small>{{ stageState(index) === "done" ? "Completed" : stageState(index) === "active" ? `${progressPercent}%` : "Pending" }}</small></span>
+          </div>
+        </template>
+      </div>
+      <footer>Job continues if you leave this page.</footer>
     </article>
 
-    <div class="uat-runs-grid">
+    <article v-if="currentOutput" class="uat-output-ready">
+      <span>✓</span>
+      <div><h2>Draft issue log is ready</h2><p>Generated from the approved {{ versionLabel }} issue snapshot.</p></div>
+      <PrimaryButton type="button" @click="emit('download', currentOutput)">⇩&nbsp; Download DOCX</PrimaryButton>
+    </article>
+
+    <div v-if="!activeJob && !displayJobs.length && !outputs.length" class="uat-runs-empty">
+      <span>▷</span>
+      <h2>No audit run yet</h2>
+      <p>Review candidate issues, approve at least one, then choose “Audit current version”.</p>
+    </div>
+
+    <div v-if="displayJobs.length || outputs.length" class="uat-runs-grid">
       <article class="uat-runs-card">
         <h2>Runs</h2>
-        <div v-for="job in displayRuns" :key="job.job_id" class="uat-run-row">
-          <span>✓</span>
-          <div><strong>{{ runTitle(job) }}</strong><small>{{ job.stage || "Preparing" }}</small></div>
-          <b :class="job.state.toLowerCase()">{{ job.state === "SUCCEEDED" ? "Succeeded" : job.state }}</b>
+        <p v-if="!displayJobs.length" class="uat-runs-list-empty">No audit runs for this version.</p>
+        <div v-for="job in displayJobs" :key="job.job_id" class="uat-run-row">
+          <span :class="job.state.toLowerCase()">{{ job.state === "SUCCEEDED" ? "✓" : ["RUNNING", "QUEUED"].includes(job.state) ? "◌" : "!" }}</span>
+          <div><strong>{{ runTitle(job) }}</strong><small>{{ runSummary(job) }}</small></div>
+          <b :class="job.state.toLowerCase()">{{ stateLabel(job) }}</b>
           <time>{{ formatDate(job.updated_at) }}</time>
+          <button v-if="['FAILED', 'INCOMPLETE'].includes(job.state)" type="button" @click="emit('retry', job)">Retry</button>
         </div>
       </article>
 
       <article class="uat-outputs-card">
         <h2>Output revisions</h2>
-        <button v-for="output in displayOutputs" :key="output.output_id" type="button" class="uat-output-row" @click="$emit('download', output)">
+        <p v-if="!outputs.length" class="uat-runs-list-empty">An output revision will appear after rendering completes.</p>
+        <button v-for="output in outputs" :key="output.output_id" type="button" class="uat-output-row" @click="emit('download', output)">
           <span>▤</span>
-          <div><strong>{{ output.ordinal === 1 ? "Revision 1" : output.filename }}</strong><small>{{ output.ordinal > 1 ? `Revision ${output.ordinal} · ` : "" }}{{ formatDate(output.created_at) }}</small></div>
+          <div><strong>{{ outputTitle(output) }}</strong><small>Revision {{ output.ordinal }} · {{ formatDate(output.created_at) }}</small></div>
           <b :class="output.status.toLowerCase()">{{ output.status }}</b>
           <i>⇩</i>
         </button>
-        <footer>ⓘ&nbsp;&nbsp; Previous outputs remain available.</footer>
+        <footer v-if="outputs.length">ⓘ&nbsp;&nbsp; Previous outputs remain available.</footer>
       </article>
     </div>
   </section>

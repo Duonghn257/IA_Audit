@@ -1854,13 +1854,13 @@
 }
 
 .uat-output-ready h2 {
-  font-size: 21px;
+  font-size: 15px;
 }
 
 .uat-output-ready p {
   margin-top: 7px;
   color: #666158;
-  font-size: 14px;
+  font-size: 11px;
 }
 
 .uat-runs-grid {
@@ -1880,8 +1880,8 @@
 
 .uat-runs-card h2,
 .uat-outputs-card h2 {
-  margin: 0 0 22px;
-  font-size: 22px;
+  margin: 0 0 18px;
+  font-size: 15px;
 }
 
 .uat-run-row {
@@ -1914,12 +1914,12 @@
 }
 
 .uat-run-row strong {
-  font-size: 16px;
+  font-size: 12px;
 }
 
 .uat-run-row small {
   color: #716c63;
-  font-size: 13px;
+  font-size: 10px;
 }
 
 .uat-run-row>b {
@@ -1933,7 +1933,7 @@
 .uat-run-row time {
   color: #514d45;
   text-align: right;
-  font-size: 13px;
+  font-size: 10px;
 }
 
 .uat-output-row {
@@ -1968,12 +1968,12 @@
 }
 
 .uat-output-row strong {
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .uat-output-row small {
   color: #716c63;
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .uat-output-row>b {
@@ -2000,7 +2000,7 @@
 .uat-outputs-card>footer {
   padding: 22px 0 2px;
   color: #706b62;
-  font-size: 12px;
+  font-size: 10px;
 }
 
 /* Audit confirmation */
@@ -3034,8 +3034,7 @@
     width: 100%;
   }
 
-  .uat-source-grid,
-  .uat-runs-grid {
+  .uat-source-grid {
     grid-template-columns: 1fr;
   }
 
@@ -3867,3 +3866,46 @@
 .uat-custom-select-options button.selected { color:#8a5a00; background:#fff1bd; font-weight:750; }
 .uat-issue-modal .uat-issue-editor footer { margin:4px -24px 0; padding:17px 24px 20px; display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e8e2d8; background:#fcfbf8; }
 .uat-issue-modal .uat-issue-editor footer .uat-button { min-height:40px; padding-inline:17px; border-radius:9px; font-size:12px; }
+
+
+/* Audit progress reuses the Source & Discovery step language. */
+.uat-run-progress { margin-bottom: 20px; }
+.uat-run-progress>footer { margin-top: 16px; color: #777167; font-size: 9px; }
+.uat-audit-progress-steps {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 12px;
+  overflow: visible;
+  padding: 4px 0 8px;
+}
+.uat-audit-progress-steps>div { min-width: 0; padding: 8px; border-radius: 9px; background: #faf8f3; }
+.uat-audit-progress-steps>div span { min-width: 0; }
+.uat-audit-progress-steps strong, .uat-audit-progress-steps small { overflow-wrap: anywhere; word-break: normal; }
+.uat-run-progress .uat-discovery-progress-header { min-width: 0; }
+.uat-run-progress .uat-discovery-progress-header>div { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+.uat-run-progress .uat-discovery-progress-header span { overflow-wrap: anywhere; }
+.uat-runs-empty { min-height: 300px; display: grid; place-content: center; justify-items: center; border: 1px dashed #d9d2c6; border-radius: 12px; text-align: center; background: #fff; }
+.uat-runs-empty>span { color: #9a6a00; font-size: 28px; }
+.uat-runs-empty h2 { margin: 12px 0 5px; font-size: 15px; }
+.uat-runs-empty p, .uat-runs-list-empty { margin: 0; color: #756f65; font-size: 10px; }
+.uat-run-row>span.running, .uat-run-row>span.queued { color: #8b6200; background: #fff3c9; animation: pulse 1.5s ease-in-out infinite; }
+.uat-run-row>span.failed, .uat-run-row>span.incomplete { color: #a52e2e; background: #fdecec; }
+.uat-run-row>b.running, .uat-run-row>b.queued { color: #7a5500; background: #fff3c9; }
+.uat-run-row>b.failed, .uat-run-row>b.incomplete { color: #9e2929; background: #fdecec; }
+.uat-run-row>button { grid-column: 2; justify-self: start; padding: 0; border: 0; color: #795400; background: transparent; font-size: 10px; font-weight: 700; cursor: pointer; }
+
+@media (max-width: 760px) {
+  .uat-runs-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 1200px) {
+  .uat-audit-progress-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .uat-run-progress .uat-discovery-progress-header { align-items: flex-start; }
+  .uat-run-progress .uat-discovery-progress-header>div { justify-content: flex-start; }
+}
+
+@media (max-width: 640px) {
+  .uat-run-progress { padding: 16px; }
+  .uat-audit-progress-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .uat-run-progress .uat-discovery-progress-header>div { display: grid; gap: 5px; }
+  .uat-run-progress .uat-discovery-progress-header i { display: none; }
+}

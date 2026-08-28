@@ -140,7 +140,7 @@ async function refreshSelectedProject(projectId: string): Promise<AuditProject |
 
 function openEventStream(projectId: string): void {
   closeEventStream()
-  const source = new EventSource(projectEventsUrl(projectId, latestEventId.value))
+  const source = new EventSource(projectEventsUrl(projectId, latestEventId.value), { withCredentials: true })
   eventSource = source
 
   source.addEventListener("progress", (message) => {
