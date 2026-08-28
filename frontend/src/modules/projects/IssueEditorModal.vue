@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from "vue";
+import PrimaryButton from "../../shared/ui/PrimaryButton.vue"
 
 interface IssueEditorValue {
   title_hint: string;
@@ -66,9 +67,9 @@ function submit(): void { if (form.observed_gap.trim()) emit("submit", { ...form
           </div>
           <footer>
             <button class="uat-button uat-button-secondary" type="button" @click="close">Cancel</button>
-            <button class="uat-button uat-button-primary" :disabled="saving" type="submit">
+            <PrimaryButton :disabled="saving" type="submit">
               {{ saving ? (mode === "create" ? "Creating…" : "Saving…") : (mode === "create" ? "Create issue" : "Save changes") }}
-            </button>
+            </PrimaryButton>
           </footer>
         </form>
       </section>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue"
+import PrimaryButton from "../../shared/ui/PrimaryButton.vue"
 import type { AuditProject, ProjectVersion } from "../../shared/types/projects"
 
 export type ProjectTab = "source" | "candidates" | "runs"
@@ -101,10 +102,10 @@ function stateLabel(state: ProjectVersion["state"]): string {
           <span class="uat-version-meta"><small>Output</small><strong>{{ selectedVersion.output_available ? (selectedVersion.state === "STALE_OUTPUT" ? "STALE" : "CURRENT") : "No output" }}</strong></span>
         </div>
       </div>
-      <button class="uat-button uat-button-primary uat-project-new-audit" type="button" @click="emit('newAudit')">
+      <PrimaryButton class="uat-project-new-audit" type="button" @click="emit('newAudit')">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
         New audit
-      </button>
+      </PrimaryButton>
     </div>
 
     <nav class="uat-project-tabs" aria-label="Project workspace tabs">

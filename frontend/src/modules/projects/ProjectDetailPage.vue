@@ -328,10 +328,12 @@ defineExpose({ createNewAudit })
 <template>
   <main class="uat-project-detail">
     <ProjectDetailHeader v-if="selectedVersion" :project="project" :versions="versions" :selected-version="selectedVersion" :active-tab="activeTab" :candidate-count="issues.length" :run-count="Math.max(jobs.length, outputs.length)" @back="emit('back')" @new-audit="createNewAudit" @version-change="changeVersion" @tab-change="activeTab = $event" />
-    <div v-if="!selectedVersion" class="uat-detail-loading">Loading project workspace…</div>
-    <SourceDiscoveryTab v-else-if="activeTab === 'source'" :state="discoveryState" :source-tree="sourceTree" :source-loading="sourceLoading" :source-error="sourceError" :correlation-id="correlationId" :error="discoveryError" :error-title="discoveryErrorTitle" @find="findCandidates" @retry="retryCandidates" @reload-source="loadSourceTree" />
-    <CandidateIssuesTab v-else-if="activeTab === 'candidates'" :issues="issues" :loading="issuesLoading" :saving="issueSaving" :error="issueError" @select="loadIssueDetail" @create="createIssue" @update="updateIssue" @disposition="updateDisposition" @retry="loadIssues()" @audit="auditModalOpen = true" />
-    <RunsOutputsTab v-else :jobs="jobs" :outputs="outputs" :project-name="project.name" :version-label="selectedVersion.label" @download="downloadOutput" />
+    <div class="uat-project-content">
+      <div v-if="!selectedVersion" class="uat-detail-loading">Loading project workspace…</div>
+      <SourceDiscoveryTab v-else-if="activeTab === 'source'" :state="discoveryState" :source-tree="sourceTree" :source-loading="sourceLoading" :source-error="sourceError" :correlation-id="correlationId" :error="discoveryError" :error-title="discoveryErrorTitle" @find="findCandidates" @retry="retryCandidates" @reload-source="loadSourceTree" />
+      <CandidateIssuesTab v-else-if="activeTab === 'candidates'" :issues="issues" :loading="issuesLoading" :saving="issueSaving" :error="issueError" @select="loadIssueDetail" @create="createIssue" @update="updateIssue" @disposition="updateDisposition" @retry="loadIssues()" @audit="auditModalOpen = true" />
+      <RunsOutputsTab v-else :jobs="jobs" :outputs="outputs" :project-name="project.name" :version-label="selectedVersion.label" @download="downloadOutput" />
+    </div>
     <AuditConfirmationModal v-if="selectedVersion" :open="auditModalOpen" :version-label="selectedVersion.label" :approved-count="approvedCount" :submitting="auditSubmitting" @close="auditModalOpen = false" @confirm="confirmAudit" />
     <NewAuditVersionModal v-if="selectedVersion" :open="versionModalOpen" :project-name="project.name" :versions="versions" :initial-base-version-id="selectedVersion.version_id" :next-version-label="nextVersionLabel" :submitting="versionSubmitting" :error="versionError" @close="versionModalOpen = false" @confirm="confirmCreateVersion" />
   </main>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue"
+import PrimaryButton from "../../shared/ui/PrimaryButton.vue"
 
 import type { LogicalRole, SourceFolder, SourceTree } from "../../shared/types/projects"
 
@@ -105,7 +106,7 @@ function formatBytes(bytes: number): string {
         <span class="uat-find-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4M8 11h6m-3-3v6" /></svg></span>
         <div><h2>Find candidate issues</h2><p>Analyse the immutable source and build evidence-backed candidates for this version.</p></div>
       </div>
-      <button class="uat-button uat-button-primary" type="button" @click="$emit('find')">Find candidates</button>
+      <PrimaryButton type="button" @click="$emit('find')">Find candidates</PrimaryButton>
     </article>
 
     <article v-else-if="state === 'running'" class="uat-discovery-progress">
@@ -125,10 +126,10 @@ function formatBytes(bytes: number): string {
       <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5m0 3h.01" /><path d="M12 3 2 21h20z" /></svg></span>
       <div><h2>{{ errorTitle || "Discovery could not complete" }}</h2><p>{{ error || "This may affect the accuracy of candidate discovery." }}</p><small v-if="correlationId">Correlation ID: {{ correlationId }}</small></div>
       <button class="uat-button uat-button-secondary" type="button">View error</button>
-      <button class="uat-button uat-button-primary" type="button" @click="$emit('retry')">
+      <PrimaryButton type="button" @click="$emit('retry')">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5" /><path d="M18.5 16a8 8 0 1 1 .5-9l1 5" /></svg>
         Retry
-      </button>
+      </PrimaryButton>
     </article>
 
     <div class="uat-source-grid" :class="{ 'source-only': !showCoverage }">

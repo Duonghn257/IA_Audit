@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import PrimaryButton from "../../shared/ui/PrimaryButton.vue"
 
 import IssueEditorModal from "./IssueEditorModal.vue";
 import type {
@@ -169,28 +170,30 @@ function submitIssueForm(form: IssueEditorValue): void {
             <h2>Candidate Issue Register</h2>
             <span>{{ issues.length }} issues</span>
           </div>
-          <button type="button" @click="openCreateModal">+ Add issue</button>
+          <PrimaryButton size="small" type="button" @click="openCreateModal">+ Add issue</PrimaryButton>
         </header>
-        <p v-if="loading" class="uat-candidate-empty">Loading issues…</p>
-        <p v-else-if="!issues.length" class="uat-candidate-empty">
-          No candidate issues yet.
-        </p>
-        <button v-for="(issue, index) in issues" :key="issue.issue_id" type="button"
-          :class="{ active: selectedIssue?.issue_id === issue.issue_id }" @click="selectIssue(issue.issue_id)">
-          <b>{{ index + 1 }}</b>
-          <span><strong>{{ issue.title_hint || issue.observed_gap }}</strong><small><i
-                :class="issue.origin.toLowerCase()">{{
-                  originLabel(issue)
-                }}</i><em>{{ confidence(issue) }}</em></small></span>
-          <span class="uat-candidate-status" :class="issue.status.toLowerCase()"><i />{{ statusLabel(issue.status)
-            }}</span>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m9 6 6 6-6 6" />
-          </svg>
-        </button>
-        <footer v-if="issues.length">
-          Showing 1 to {{ issues.length }} of {{ issues.length }} issues
-        </footer>
+        <div class="uat-candidate-list">
+          <p v-if="loading" class="uat-candidate-empty">Loading issues…</p>
+          <p v-else-if="!issues.length" class="uat-candidate-empty">
+            No candidate issues yet.
+          </p>
+          <button v-for="(issue, index) in issues" :key="issue.issue_id" type="button"
+            :class="{ active: selectedIssue?.issue_id === issue.issue_id }" @click="selectIssue(issue.issue_id)">
+            <b>{{ index + 1 }}</b>
+            <span><strong>{{ issue.title_hint || issue.observed_gap }}</strong><small><i
+                  :class="issue.origin.toLowerCase()">{{
+                    originLabel(issue)
+                  }}</i><em>{{ confidence(issue) }}</em></small></span>
+            <span class="uat-candidate-status" :class="issue.status.toLowerCase()"><i />{{ statusLabel(issue.status)
+              }}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+          </button>
+          <footer v-if="issues.length">
+            Showing 1 to {{ issues.length }} of {{ issues.length }} issues
+          </footer>
+        </div>
       </aside>
 
       <article v-if="selectedIssue" class="uat-issue-detail">
@@ -212,71 +215,73 @@ function submitIssueForm(form: IssueEditorValue): void {
             </p>
           </div>
           <div class="uat-issue-title-actions">
-            <button class="uat-button uat-button-primary uat-button-small uat-modify-button" type="button"
+            <PrimaryButton class="uat-modify-button" size="small" type="button"
               @click="openEditModal">
               Modify
-            </button>
+            </PrimaryButton>
           </div>
         </header>
 
-        <div class="uat-issue-field">
-          <strong>Observed gap</strong>
-          <p>{{ selectedIssue.observed_gap }}</p>
-        </div>
-        <div class="uat-issue-field">
-          <strong>Evidence summary</strong>
-          <p>
-            {{
-              selectedIssue.evidence_summary || "No evidence summary supplied."
-            }}
-          </p>
-        </div>
-        <div class="uat-issue-field">
-          <strong>Risk category</strong>
-          <p>
-            <span v-if="selectedIssue.risk_category" class="uat-risk-chip">{{
-              selectedIssue.risk_category
-              }}</span><span v-else>Not specified</span>
-          </p>
-        </div>
-
-        <section class="uat-references-card">
-          <template v-for="kind in referenceKinds" :key="kind">
-            <h3>
-              {{
-                kind === "EVIDENCE"
-                  ? "Evidence references"
-                  : "Criteria references"
-              }}
-            </h3>
-            <p v-if="
-              !selectedIssue.source_refs.some(
-                (reference) => reference.ref_kind === kind,
-              )
-            " class="uat-reference-empty">
-              No {{ kind.toLowerCase() }} references.
-            </p>
-            <button v-for="reference in selectedIssue.source_refs.filter(
-              (item) => item.ref_kind === kind,
-            )" :key="reference.reference_id" type="button">
-              <span>▣&nbsp; {{ reference.document_id }}
-                <b :class="{ criteria: isCriteria(reference) }">{{
-                  kind
-                  }}</b></span><small>{{ referenceLocation(reference) }} ↗</small>
-            </button>
-          </template>
-        </section>
-
-        <section class="uat-disposition-card">
-          <h3>Disposition</h3>
-          <div>
-            <button v-for="option in dispositionOptions" :key="option.status"
-              :class="{ active: selectedIssue.status === option.status }" :disabled="saving" type="button"
-              @click="chooseDisposition(option.status)">
-              <i />{{ option.label }}
-            </button>
+        <div class="uat-issue-detail-body">
+          <div class="uat-issue-field">
+            <strong>Observed gap</strong>
+            <p>{{ selectedIssue.observed_gap }}</p>
           </div>
+          <div class="uat-issue-field">
+            <strong>Evidence summary</strong>
+            <p>
+              {{
+                selectedIssue.evidence_summary || "No evidence summary supplied."
+              }}
+            </p>
+          </div>
+          <div class="uat-issue-field">
+            <strong>Risk category</strong>
+            <p>
+              <span v-if="selectedIssue.risk_category" class="uat-risk-chip">{{
+                selectedIssue.risk_category
+                }}</span><span v-else>Not specified</span>
+            </p>
+          </div>
+
+          <section class="uat-references-card">
+            <template v-for="kind in referenceKinds" :key="kind">
+              <h3>
+                {{
+                  kind === "EVIDENCE"
+                    ? "Evidence references"
+                    : "Criteria references"
+                }}
+              </h3>
+              <p v-if="
+                !selectedIssue.source_refs.some(
+                  (reference) => reference.ref_kind === kind,
+                )
+              " class="uat-reference-empty">
+                No {{ kind.toLowerCase() }} references.
+              </p>
+              <button v-for="reference in selectedIssue.source_refs.filter(
+                (item) => item.ref_kind === kind,
+              )" :key="reference.reference_id" type="button">
+                <span>▣&nbsp; {{ reference.document_id }}
+                  <b :class="{ criteria: isCriteria(reference) }">{{
+                    kind
+                    }}</b></span><small>{{ referenceLocation(reference) }} ↗</small>
+              </button>
+            </template>
         </section>
+
+          <section class="uat-disposition-card">
+            <h3>Disposition</h3>
+            <div>
+              <button v-for="option in dispositionOptions" :key="option.status"
+                :class="{ active: selectedIssue.status === option.status }" :disabled="saving" type="button"
+                @click="chooseDisposition(option.status)">
+                <i />{{ option.label }}
+              </button>
+            </div>
+          </section>
+        </div>
       </article>
       <div v-else-if="!loading" class="uat-issue-detail uat-candidate-empty">
         Select an issue or create a manual issue.
@@ -293,10 +298,9 @@ function submitIssueForm(form: IssueEditorValue): void {
     />
     <footer class="uat-audit-preflight">
       <span>♢&nbsp; Audit preflight</span><strong>{{ approvedCount }} approved issues</strong><i v-if="warningCount" />
-      <b v-if="warningCount">{{ warningCount }} warning{{ warningCount === 1 ? "" : "s" }}</b><button
-        class="uat-button uat-button-primary" :disabled="!approvedCount" type="button" @click="startAudit">
+      <b v-if="warningCount">{{ warningCount }} warning{{ warningCount === 1 ? "" : "s" }}</b><PrimaryButton :disabled="!approvedCount" type="button" @click="startAudit">
         ▷&nbsp; Audit current version
-      </button>
+      </PrimaryButton>
     </footer>
   </section>
 </template>

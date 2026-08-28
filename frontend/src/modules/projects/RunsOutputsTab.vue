@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import PrimaryButton from "../../shared/ui/PrimaryButton.vue"
 
 import { formatDate } from "../../shared/formatting/date"
 import type { AuditJob, OutputRevision } from "../../shared/types/projects"
@@ -35,7 +36,7 @@ function runTitle(job: (typeof displayRuns.value)[number]): string {
     <article class="uat-output-ready">
       <span>✓</span>
       <div><h2>Draft issue log is ready</h2><p>Generated from the approved {{ versionLabel }} issue snapshot.</p></div>
-      <button class="uat-button uat-button-primary" type="button" @click="$emit('download', outputs[0] || null)">⇩&nbsp; Download DOCX</button>
+      <PrimaryButton type="button" @click="$emit('download', outputs[0] || null)">⇩&nbsp; Download DOCX</PrimaryButton>
     </article>
 
     <div class="uat-runs-grid">
