@@ -56,7 +56,7 @@ một phần của command UAT mới.
 | Audit version | Workspace issue độc lập có thể sửa, được đánh số `v0.N`. |
 | Issue | Finding AI candidate hoặc finding nhập tay, thuộc đúng một audit version. |
 | Job | Command chạy durable, loại `DISCOVERY` hoặc `AUDIT`. |
-| Audit-input snapshot | Bộ issue, references và central asset versions đã đóng băng cho một Audit job. |
+| Audit-input snapshot | Bộ issue, references và central Guideline/template ID/hash đã đóng băng cho một Audit job. |
 | Output revision | Một DOCX bất biến do Audit thành công tạo ra. Một version có thể có nhiều revision. |
 | Central asset | Guideline hoặc DOCX template do app quản lý; không bao giờ là evidence từ folder upload. |
 
@@ -175,9 +175,9 @@ erDiagram
 | `issue_changes` | Append-only before/after JSON hoặc patch, action, actor, correlation ID, timestamp. |
 | `jobs` | `id`, `project_id`, `project_version_id`, `type`, state, stage, progress counters, input hash, checkpoint, correlation ID, lease owner/until, heartbeat, `attempt_count`, timestamps. Repository ngăn duplicate active `(project_version_id, type, input_hash)`. |
 | `job_events` | `event_id` tăng đơn điệu, `job_id`, stage, message, item counters, warning, timestamp. |
-| `audit_input_snapshots` | `id`, `project_version_id`, `job_id` unique, source snapshot ID, selected issue payload/hash, central asset version IDs, run manifest reference, created time; immutable. |
+| `audit_input_snapshots` | `id`, `project_version_id`, `job_id` unique, selected issue payload/hash, frozen central asset manifest, run manifest reference, created time; immutable. |
 | `output_revisions` | `id`, `project_version_id`, `audit_input_snapshot_id`, ordinal, state, DOCX object key/hash/filename, run manifest reference, created time; unique `(project_version_id, ordinal)`. |
-| Central asset version | MVP chưa cần bảng quản trị asset. Audit-input snapshot giữ version/hash Guideline và DOCX template mà job đã dùng. |
+| `central_assets` | Bộ hiện hành gồm nhiều Guidelines và một `template.docx`; unique `(kind, filename)`, upload cùng tên overwrite metadata/object hiện hành. Audit snapshot giữ immutable copy và content hash. |
 
 Dùng UUID/ULID làm external identifier; internal object key không được trả như
 public URL. Enum lưu dưới dạng string có database constraint hoặc native
@@ -338,7 +338,7 @@ như AI-verified chỉ vì hệ thống tìm được evidence sau đó.
 | Start Discovery | Version thuộc project; không có discovery job tương đương đang active; immutable source có scope, risk context, evidence và criteria readable. |
 | Create/patch issue | `observed_gap` bắt buộc; `origin` immutable; mọi typed ref resolve tới source snapshot document của project; row version khớp khi patch. |
 | Approve AI issue | AI candidate có `evidence_summary` và ít nhất một source ref `EVIDENCE` và `CRITERIA` hợp lệ. |
-| Start Audit | Không có Audit active cùng frozen input; có ít nhất một approved issue; các AI issue pass rule trên; central asset đang effective; có thể lưu immutable input snapshot. |
+| Start Audit | Không có Audit active cùng frozen input; có ít nhất một approved issue; các AI issue pass rule trên; central Guideline/template hiện hành đầy đủ; có thể lưu immutable input snapshot. |
 | Retry job | Job là `FAILED` hoặc `INCOMPLETE`, retry policy cho phép và không thể tạo duplicate active attempt. |
 
 ## 9. Actor model sẵn sàng cho Entra

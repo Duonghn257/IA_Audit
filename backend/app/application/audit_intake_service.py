@@ -32,8 +32,9 @@ _ROLE_FOLDERS = {
     "APM": LogicalRole.RISK_CONTEXT,
     "Process Understanding": LogicalRole.EVIDENCE,
     "Process SOP": LogicalRole.CRITERIA,
+    "Samples": LogicalRole.SAMPLE,
 }
-_REQUIRED_FOLDERS = frozenset(_ROLE_FOLDERS)
+_ALLOWED_FOLDERS = frozenset(_ROLE_FOLDERS)
 _REQUIRED_ROLES = (
     LogicalRole.SCOPE,
     LogicalRole.RISK_CONTEXT,
@@ -256,7 +257,9 @@ class AuditIntakeService:
         validations: list[UploadFileValidation] = []
         errors: list[dict[str, object]] = []
         warnings: list[dict[str, object]] = []
-        role_summary = {role.value: 0 for role in _REQUIRED_ROLES}
+        role_summary = {
+            role.value: 0 for role in dict.fromkeys(_ROLE_FOLDERS.values())
+        }
 
         for file in files:
             role = _logical_role(file.relative_path)
@@ -515,12 +518,12 @@ def _project_folder(relative_path: str) -> tuple[str, str | None] | None:
         raise ValueError(
             f"File {relative_path} must be inside one of the required audit folders."
         )
-    if parts[0] in _REQUIRED_FOLDERS:
+    if parts[0] in _ALLOWED_FOLDERS:
         return parts[0], None
-    if len(parts) >= 3 and parts[1] in _REQUIRED_FOLDERS:
+    if len(parts) >= 3 and parts[1] in _ALLOWED_FOLDERS:
         return parts[1], parts[0]
     candidate = parts[1] if len(parts) >= 3 else parts[0]
-    expected_by_casefold = {folder.casefold(): folder for folder in _REQUIRED_FOLDERS}
+    expected_by_casefold = {folder.casefold(): folder for folder in _ALLOWED_FOLDERS}
     expected = expected_by_casefold.get(candidate.casefold())
     if expected is not None:
         raise ValueError(

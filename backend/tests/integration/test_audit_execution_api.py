@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 
 from app.application.audit_pipeline import PipelineRequest, PipelineResult
@@ -8,6 +9,45 @@ from docx import Document
 from fastapi.testclient import TestClient
 
 from tests.integration.test_discovery_api import _create_project, _settings
+
+
+def _central_docx_bytes(text: str) -> bytes:
+    document = Document()
+    document.add_paragraph(text)
+    stream = BytesIO()
+    document.save(stream)
+    return stream.getvalue()
+
+
+def _upload_central_knowledge(client: TestClient) -> None:
+    guideline = client.post(
+        "/api/v1/central-knowledge/guidelines",
+        files={
+            "file": (
+                "writing-guideline.docx",
+                _central_docx_bytes("Central guideline original"),
+                (
+                    "application/vnd.openxmlformats-officedocument."
+                    "wordprocessingml.document"
+                ),
+            )
+        },
+    )
+    assert guideline.status_code == 200, guideline.text
+    template = client.put(
+        "/api/v1/central-knowledge/template",
+        files={
+            "file": (
+                "template.docx",
+                _central_docx_bytes("Central template"),
+                (
+                    "application/vnd.openxmlformats-officedocument."
+                    "wordprocessingml.document"
+                ),
+            )
+        },
+    )
+    assert template.status_code == 200, template.text
 
 
 class SuccessfulAuditPipeline:
@@ -29,6 +69,17 @@ class SuccessfulAuditPipeline:
         assert (
             request.project_path / "Process SOP" / "criteria.docx"
         ).is_file()
+        assert (
+            request.project_path / "Samples" / "approved-report.docx"
+        ).is_file()
+        guideline_path = (
+            request.project_path / "Guidelines" / "writing-guideline.docx"
+        )
+        assert guideline_path.is_file()
+        assert Document(guideline_path).paragraphs[0].text == (
+            "Central guideline original"
+        )
+        assert (request.project_path / "Output" / "template.docx").is_file()
         if reporter is not None:
             from app.application.audit_pipeline import PipelineProgress
 
@@ -90,6 +141,26 @@ def test_audit_requires_candidates_in_selected_version(tmp_path: Path) -> None:
     app.state.database.dispose()
 
 
+def test_audit_requires_central_knowledge(tmp_path: Path) -> None:
+    app = create_app(settings=_settings(tmp_path))
+    with TestClient(app) as client:
+        project_id, version_id = _create_project(client)
+        _create_manual_candidate(client, project_id, version_id)
+        version = client.get(
+            f"/api/v1/projects/{project_id}/versions/{version_id}"
+        ).json()
+        response = client.post(
+            f"/api/v1/projects/{project_id}/versions/{version_id}/audit-jobs",
+            json={"issue_revision": version["issue_revision"]},
+        )
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "AUDIT_PREFLIGHT_FAILED"
+        assert "Central knowledge is not ready" in (
+            response.json()["error"]["message"]
+        )
+    app.state.database.dispose()
+
+
 def test_audit_freezes_database_candidates_and_publishes_docx(
     tmp_path: Path,
 ) -> None:
@@ -97,6 +168,7 @@ def test_audit_freezes_database_candidates_and_publishes_docx(
     app = create_app(settings=_settings(tmp_path), audit_pipeline=pipeline)
     with TestClient(app) as client:
         project_id, version_id = _create_project(client)
+        _upload_central_knowledge(client)
         candidate = _create_manual_candidate(client, project_id, version_id)
         version = client.get(
             f"/api/v1/projects/{project_id}/versions/{version_id}"
@@ -154,6 +226,7 @@ def test_audit_retry_reuses_frozen_input_snapshot(tmp_path: Path) -> None:
     app = create_app(settings=_settings(tmp_path), audit_pipeline=pipeline)
     with TestClient(app) as client:
         project_id, version_id = _create_project(client)
+        _upload_central_knowledge(client)
         candidate = _create_manual_candidate(client, project_id, version_id)
         version = client.get(
             f"/api/v1/projects/{project_id}/versions/{version_id}"
@@ -164,6 +237,20 @@ def test_audit_retry_reuses_frozen_input_snapshot(tmp_path: Path) -> None:
         )
         job_id = started.json()["job_id"]
         assert client.get(f"/api/v1/jobs/{job_id}").json()["state"] == "FAILED"
+        overwritten = client.post(
+            "/api/v1/central-knowledge/guidelines",
+            files={
+                "file": (
+                    "writing-guideline.docx",
+                    _central_docx_bytes("Central guideline overwritten"),
+                    (
+                    "application/vnd.openxmlformats-officedocument."
+                    "wordprocessingml.document"
+                ),
+                )
+            },
+        )
+        assert overwritten.status_code == 200, overwritten.text
         updated = client.put(
             f"/api/v1/projects/{project_id}/versions/{version_id}/issues/"
             f"{candidate['issue_id']}",

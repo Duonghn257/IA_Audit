@@ -81,6 +81,7 @@ _SOURCE_FOLDER_NAMES = {
     "RISK_CONTEXT": "APM",
     "EVIDENCE": "Process Understanding",
     "CRITERIA": "Process SOP",
+    "SAMPLE": "Samples",
 }
 _SOURCE_ROLE_ORDER = tuple(_SOURCE_FOLDER_NAMES)
 

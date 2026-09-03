@@ -35,7 +35,7 @@ Create project and v0.1 -> Find candidates -> Audit current version
 - [ ] Add issues, typed source references, dispositions, origin and edit revision fields.
 - [ ] Add durable jobs, job attempts, progress events, lease/heartbeat and checkpoint fields.
 - [ ] Add immutable audit-input snapshots and DOCX output revisions.
-- [ ] Add central asset metadata for Guideline and DOCX template versions.
+- [x] Add current central asset metadata for Guidelines and one DOCX template.
 - [ ] Write forward and rollback-safe Alembic migrations.
 - [ ] Publish/freeze the OpenAPI contract used by the frontend developer.
 
@@ -51,14 +51,14 @@ single project status as the workflow state.
 - [ ] Allow only `.docx`, `.pdf` and `.xlsx`; validate extension, MIME/signature and readability.
 - [ ] Reject empty, corrupt, encrypted/password-protected and unsupported files with file-level errors.
 - [ ] Resolve the SRS malware-scan gate: scan staged files before promotion or record a Leader-approved UAT exception.
-- [ ] Map folders/files to configurable logical roles: `SCOPE`, `RISK_CONTEXT`, `EVIDENCE` and `CRITERIA`.
+- [ ] Map folders/files to configurable logical roles: `SCOPE`, `RISK_CONTEXT`, `EVIDENCE`, `CRITERIA` and optional project `SAMPLE`.
 - [ ] Require readable AWP, APM, evidence and criteria artefacts before discovery is allowed.
 - [ ] Return the normalized folder tree, detected role, warnings and blocking errors.
 - [ ] Store each original source artefact in private S3 and record hash, size, MIME and object key.
 - [ ] Store parsed `.md`/JSON only as derived, rebuildable artefacts; never replace the originals.
 - [ ] Promote staging to an immutable project source snapshot.
 - [ ] Create the project and `v0.1` atomically after successful confirmation.
-- [ ] Ensure uploaded Guidelines/templates cannot override central assets.
+- [ ] Ensure uploaded Guidelines/templates cannot override central assets while `Samples/` remains project source.
 - [ ] Add expiry/cleanup for abandoned staging sessions without deleting created-project sources.
 
 **Done when:** a valid folder creates exactly one project and `v0.1` without
@@ -93,7 +93,7 @@ state.
 - [ ] Preserve XLSX workbook/sheet/cell-range, displayed value and formula metadata.
 - [ ] Record parser name/version, source hash and parse warnings on every derived artefact.
 - [ ] Cache parsed output by content hash and make parsing deterministic/idempotent.
-- [ ] Prevent central Guidelines/templates and user project artefacts from being mixed in provenance.
+- [ ] Prevent central Guidelines/templates from being mixed with project evidence provenance; keep project Samples typed as non-evidence context.
 
 #### D2. Scope, criteria and evidence preparation
 
@@ -112,7 +112,7 @@ state.
 - [ ] Add token-budget controls, batching and deterministic context ordering.
 - [ ] Define versioned structured-output schemas and prompts for scope extraction, evidence extraction, gap detection and reviewer validation.
 - [ ] Configure Anthropic timeout, bounded retry/backoff and malformed-JSON recovery.
-- [ ] Record model ID, prompt version, asset versions, token usage and run parameters in the manifest.
+- [ ] Record model ID, prompt version, central asset IDs/hashes, token usage and run parameters in the manifest.
 
 #### D4. Candidate generation and validation
 
@@ -162,7 +162,7 @@ every version retains an independent issue workspace and output history.
 - [ ] Add Audit preflight validation using different rules for AI and manual issues.
 - [ ] Freeze an immutable issue/input snapshot when Audit is submitted.
 - [ ] Draft only auditor-accepted issues and do not silently add or remove issues.
-- [ ] Apply the centrally managed Guideline and DOCX template versions.
+- [ ] Apply the current centrally managed Guidelines and DOCX template from a frozen job snapshot.
 - [ ] Validate source claims, required fields, issue count and document structure before publishing output.
 - [ ] Render a DOCX whose filename follows `<Project Name>_Issue Log v0.N.docx`.
 - [ ] Attach an immutable output revision to the same current version; Audit must not increment the version.

@@ -13,6 +13,7 @@ from app.api.errors import ApiError
 from app.application.audit_execution_service import AuditExecutionService
 from app.application.audit_intake_service import AuditIntakeService
 from app.application.audit_workspace_service import AuditWorkspaceService
+from app.application.central_knowledge_service import CentralKnowledgeService
 from app.application.auth_service import AuthService
 from app.application.discovery_service import DiscoveryService
 from app.application.path_resolver import LocalPathResolver
@@ -151,6 +152,12 @@ def get_audit_execution_service(
     request: Request,
 ) -> AuditExecutionService:
     return request.app.state.audit_execution_service
+
+
+def get_central_knowledge_service(
+    request: Request,
+) -> CentralKnowledgeService:
+    return request.app.state.central_knowledge_service
 
 
 SettingsDependency = Annotated[ApiSettings, Depends(get_settings)]

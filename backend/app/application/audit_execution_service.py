@@ -18,6 +18,10 @@ from app.application.audit_pipeline import (
     PipelineRequest,
     PipelineResult,
 )
+from app.domain.central_knowledge import (
+    CentralAssetRecord,
+    CentralKnowledgeNotReadyError,
+)
 from app.domain.audit import (
     AuditInputSnapshotRecord,
     AuditPreflightError,
@@ -47,22 +51,11 @@ _ROLE_FOLDERS = {
     LogicalRole.RISK_CONTEXT: "APM",
     LogicalRole.EVIDENCE: "Process Understanding",
     LogicalRole.CRITERIA: "Process SOP",
+    LogicalRole.SAMPLE: "Samples",
     LogicalRole.CONTEXT: "Context",
 }
 
 
-@dataclass(frozen=True)
-class CentralAuditAssets:
-    guideline_path: Path | None = None
-    guideline_version: str = "builtin-default"
-    template_path: Path | None = None
-    template_version: str = "builtin-default"
-
-    def versions(self) -> dict[str, str]:
-        return {
-            "guideline": self.guideline_version,
-            "template": self.template_version,
-        }
 
 
 @dataclass(frozen=True)
@@ -147,6 +140,20 @@ class AuditStorage(Protocol):
     def path_for_download(self, object_key: str) -> Path: ...
 
 
+class AuditKnowledgeProvider(Protocol):
+    def required_assets(self) -> list[CentralAssetRecord]: ...
+    def manifest_for(
+        self, assets: Sequence[CentralAssetRecord]
+    ) -> dict[str, object]: ...
+    def freeze_for_job(
+        self, job_id: str, assets: Sequence[CentralAssetRecord]
+    ) -> dict[str, object]: ...
+    def materialize_for_audit(
+        self, manifest: dict[str, object], workspace: Path, stack: ExitStack
+    ) -> None: ...
+    def discard_job_snapshot(self, job_id: str) -> None: ...
+
+
 class PipelineRunner(Protocol):
     def run(
         self,
@@ -164,13 +171,13 @@ class AuditExecutionService:
         repository: AuditRepository,
         storage: AuditStorage,
         *,
+        knowledge: AuditKnowledgeProvider,
         pipeline: PipelineRunner | None = None,
-        assets: CentralAuditAssets | None = None,
     ) -> None:
         self._repository = repository
         self._storage = storage
         self._pipeline = pipeline or AuditPipeline()
-        self._assets = assets or CentralAuditAssets()
+        self._knowledge = knowledge
 
     def start_audit(
         self,
@@ -209,11 +216,15 @@ class AuditExecutionService:
             "issue_revision": issue_revision,
             "issues": [_serialise_issue(issue) for issue in issues],
         }
-        asset_versions = self._assets.versions()
+        try:
+            assets = self._knowledge.required_assets()
+        except CentralKnowledgeNotReadyError as exc:
+            raise AuditPreflightError(str(exc)) from exc
+        asset_manifest = self._knowledge.manifest_for(assets)
         input_hash = _audit_input_hash(
             issue_payload,
             documents,
-            asset_versions,
+            asset_manifest,
             self.pipeline_version,
         )
         matching = [
@@ -225,16 +236,25 @@ class AuditExecutionService:
         if matching:
             return AuditStart(matching[0], scheduled=False)
 
-        job, _ = self._repository.enqueue_audit_job(
-            project_id,
-            version_id,
-            job_id=str(uuid4()),
-            snapshot_id=str(uuid4()),
-            input_hash=input_hash,
-            issue_payload=issue_payload,
-            central_asset_versions=asset_versions,
-            correlation_id=correlation_id,
-        )
+        job_id = str(uuid4())
+        try:
+            frozen_assets = self._knowledge.freeze_for_job(job_id, assets)
+        except (FileNotFoundError, ValueError) as exc:
+            raise AuditPreflightError(str(exc)) from exc
+        try:
+            job, _ = self._repository.enqueue_audit_job(
+                project_id,
+                version_id,
+                job_id=job_id,
+                snapshot_id=str(uuid4()),
+                input_hash=input_hash,
+                issue_payload=issue_payload,
+                central_asset_versions=frozen_assets,
+                correlation_id=correlation_id,
+            )
+        except Exception:
+            self._knowledge.discard_job_snapshot(job_id)
+            raise
         return AuditStart(job, scheduled=True)
 
     def run_audit(self, job_id: str) -> None:
@@ -267,7 +287,9 @@ class AuditExecutionService:
                 workspace = Path(temporary)
                 with ExitStack() as stack:
                     self._materialize_source(stack, workspace, documents)
-                    self._materialize_assets(workspace)
+                    self._knowledge.materialize_for_audit(
+                        snapshot.central_asset_versions, workspace, stack
+                    )
                     result = self._pipeline.run(
                         PipelineRequest(
                             project_path=workspace,
@@ -396,18 +418,6 @@ class AuditExecutionService:
                 )
             shutil.copy2(source, destination)
 
-    def _materialize_assets(self, workspace: Path) -> None:
-        if self._assets.guideline_path is not None:
-            destination = workspace / "Guidelines" / (
-                self._assets.guideline_path.name
-            )
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(self._assets.guideline_path, destination)
-        if self._assets.template_path is not None:
-            destination = workspace / "Output" / "template.docx"
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(self._assets.template_path, destination)
-
     def _report_progress(
         self, job_id: str, progress: PipelineProgress
     ) -> None:
@@ -473,7 +483,7 @@ def _serialise_issue(issue: IssueRecord) -> dict[str, Any]:
 def _audit_input_hash(
     issue_payload: dict[str, Any],
     documents: Sequence[SourceDocumentRecord],
-    asset_versions: dict[str, str],
+    asset_versions: dict[str, object],
     pipeline_version: str,
 ) -> str:
     payload = {

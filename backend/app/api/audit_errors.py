@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from fastapi import status
 
 from app.api.errors import ApiError
+from app.domain.central_knowledge import CentralAssetNotFoundError
 from app.domain.audit import (
     ActiveJobConflictError,
     AuditIssueNotFoundError,
@@ -29,6 +30,10 @@ from app.domain.audit import (
 def audit_api_errors() -> Iterator[None]:
     try:
         yield
+    except CentralAssetNotFoundError as exc:
+        raise _not_found(
+            "CENTRAL_ASSET_NOT_FOUND", "Central asset", exc
+        ) from exc
     except UploadSessionNotFoundError as exc:
         raise _not_found(
             "UPLOAD_SESSION_NOT_FOUND", "Upload session", exc

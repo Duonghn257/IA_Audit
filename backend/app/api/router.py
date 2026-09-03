@@ -13,6 +13,7 @@ from app.api.routes.audit_jobs import router as audit_jobs_router
 from app.api.routes.audit_sources import router as audit_sources_router
 from app.api.routes.audit_versions import router as audit_versions_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.central_knowledge import router as central_knowledge_router
 from app.api.routes.health import router as health_router
 from app.api.routes.planned_storage import router as planned_storage_router
 from app.api.routes.projects import router as projects_router
@@ -31,4 +32,5 @@ api_v1_router.include_router(
     dependencies=[*_protected, Depends(require_owned_project)],
 )
 api_v1_router.include_router(audit_jobs_router, dependencies=_protected)
+api_v1_router.include_router(central_knowledge_router, dependencies=_protected)
 api_v1_router.include_router(planned_storage_router, dependencies=_protected)

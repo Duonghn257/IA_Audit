@@ -1,6 +1,6 @@
 # UAT API Contract — Operation Report Jedi
 
-> Contract version: `1.3.0-uat`
+> Contract version: `1.4.0-uat`
 > Base URL: `/api/v1`  
 > Content type mặc định: `application/json`
 > OpenAPI runtime: `/openapi.json`
@@ -158,6 +158,11 @@ Với cùng scope và `Idempotency-Key`:
 | READY | `POST` | `/upload-sessions/{session_id}/validate` | Validate/revalidate file đã upload | `200 UploadSession` |
 | READY | `POST` | `/upload-sessions/{session_id}/projects` | Promote snapshot, tạo project và `v0.1` | `201 CreateProjectFromUploadResponse` |
 | READY | `DELETE` | `/upload-sessions/{session_id}` | Hủy staging chưa promote | `204` |
+| READY | `GET` | `/central-knowledge` | List Guidelines/template hiện hành | `200 CentralKnowledge` |
+| READY | `POST` | `/central-knowledge/guidelines` | Upload hoặc overwrite Guideline cùng tên | `200 CentralAsset` |
+| READY | `PUT` | `/central-knowledge/template` | Upload hoặc overwrite `template.docx` | `200 CentralAsset` |
+| READY | `DELETE` | `/central-knowledge/files/{asset_id}` | Xóa asset hiện hành | `204` |
+| READY | `GET` | `/central-knowledge/files/{asset_id}/download` | Tải central asset | `200 file` |
 
 ### 3.2 Project, version và issue workspace
 
@@ -221,7 +226,8 @@ Với cùng scope và `Idempotency-Key`:
       "SCOPE": 1,
       "RISK_CONTEXT": 1,
       "EVIDENCE": 4,
-      "CRITERIA": 2
+      "CRITERIA": 2,
+      "SAMPLE": 1
     }
   },
   "allowed_actions": ["CREATE_PROJECT", "DISCARD"],
@@ -233,7 +239,7 @@ Upload session states:
 `UPLOADING | VALIDATING | READY_TO_CREATE | INVALID | PROMOTED | EXPIRED`.
 
 Logical roles:
-`SCOPE | RISK_CONTEXT | EVIDENCE | CRITERIA | CONTEXT`.
+`SCOPE | RISK_CONTEXT | EVIDENCE | CRITERIA | SAMPLE | CONTEXT`.
 
 Validation message:
 
@@ -284,8 +290,8 @@ Project states:
 {
   "snapshot_id": "src_01J5...",
   "status": "FROZEN",
-  "folder_count": 4,
-  "file_count": 8,
+  "folder_count": 5,
+  "file_count": 9,
   "total_size_bytes": 4823130,
   "folders": [
     {
@@ -310,8 +316,9 @@ Project states:
 ```
 
 Folder được nhóm theo logical role và sắp theo thứ tự SCOPE (AWP),
-RISK_CONTEXT (APM), EVIDENCE (Process Understanding), rồi CRITERIA
-(Process SOP). Chỉ folder thực sự có document được trả về. File trong mỗi
+RISK_CONTEXT (APM), EVIDENCE (Process Understanding), CRITERIA
+(Process SOP), rồi SAMPLE (Samples). `Samples/` là optional và chỉ xuất hiện khi
+project thực sự upload sample document. Chỉ folder thực sự có document được trả về. File trong mỗi
 folder được sắp theo relative path.
 
 `status = READY` nghĩa là file đã qua validation và nằm trong immutable
@@ -637,6 +644,69 @@ người dùng có thể retry.
 **Lỗi chính:** `404 UPLOAD_SESSION_NOT_FOUND`,
 `409 INVALID_STATE` nếu session đã promote.
 
+### 6.7 Central knowledge APIs
+
+Guidelines và `template.docx` là knowledge dùng chung toàn app. Runtime chỉ giữ
+một bộ hiện hành, không có business version. `Samples/` không dùng các endpoint
+này; Samples được upload trong project source.
+
+#### GET `/central-knowledge`
+
+Trả danh sách Guidelines, template hiện hành và `ready_for_audit`. Giá trị này
+chỉ là `true` khi có ít nhất một Guideline và một template.
+
+```json
+{
+  "guidelines": [
+    {
+      "asset_id": "asset-guideline-id",
+      "kind": "GUIDELINE",
+      "filename": "Formatting Guidelines.pdf",
+      "content_hash": "sha256:...",
+      "size_bytes": 125000,
+      "content_type": "application/pdf",
+      "uploaded_by": "uat_shared_user",
+      "created_at": "2026-09-03T08:00:00Z",
+      "updated_at": "2026-09-03T08:00:00Z",
+      "download_url": "/api/v1/central-knowledge/files/asset-guideline-id/download"
+    }
+  ],
+  "template": {
+    "asset_id": "asset-template-id",
+    "kind": "TEMPLATE",
+    "filename": "template.docx",
+    "content_hash": "sha256:...",
+    "size_bytes": 42000,
+    "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "uploaded_by": "uat_shared_user",
+    "created_at": "2026-09-03T08:00:00Z",
+    "updated_at": "2026-09-03T08:00:00Z",
+    "download_url": "/api/v1/central-knowledge/files/asset-template-id/download"
+  },
+  "ready_for_audit": true
+}
+```
+
+#### POST `/central-knowledge/guidelines`
+
+Nhận `multipart/form-data` với field `file`. Hỗ trợ DOCX, PDF, XLSX; file phải
+parse được. Cùng normalized filename sẽ giữ nguyên `asset_id` và overwrite nội
+dung hiện hành.
+
+#### PUT `/central-knowledge/template`
+
+Nhận `multipart/form-data` với field `file`. Chỉ nhận DOCX mở được; server lưu
+tên canonical `template.docx` và overwrite template hiện hành.
+
+#### DELETE `/central-knowledge/files/{asset_id}`
+
+Xóa asset khỏi bộ hiện hành. Audit mới có thể fail preflight sau khi xóa; Audit
+đã enqueue/retry không bị ảnh hưởng vì sử dụng immutable job snapshot.
+
+#### GET `/central-knowledge/files/{asset_id}/download`
+
+Tải file hiện hành. Trả `404 CENTRAL_ASSET_NOT_FOUND` nếu asset đã bị xóa.
+
 ## 7. Project và version APIs
 
 ### 7.1 GET `/projects`
@@ -933,12 +1003,15 @@ Preflight và freeze input:
 - `DRAFT`, `READY_FOR_REVIEW`, `APPROVED`, `NEEDS_EVIDENCE` được đưa vào output; `REJECTED` và `OUT_OF_SCOPE` bị loại;
 - phải còn ít nhất một candidate hợp lệ và mọi issue phải có `observed_gap`;
 - AI candidate phải có evidence summary, `EVIDENCE` refs và `CRITERIA`/SOP refs; manual issue vẫn được phép thiếu refs theo UAT policy;
-- toàn bộ issue payload, issue revision và central asset versions được đóng băng trong `audit_input_snapshots`;
-- input hash bao gồm frozen issues, immutable source hashes, central asset versions và pipeline version; request tương đương tái sử dụng job hiện có.
+- toàn bộ issue payload, issue revision và central Guideline/template manifest được đóng băng trong `audit_input_snapshots`;
+- input hash bao gồm frozen issues, immutable project source hashes, central asset IDs/content hashes và pipeline version; request tương đương tái sử dụng job hiện có;
+- phải có ít nhất một Guideline hiện hành và một `template.docx`; nếu thiếu trả `AUDIT_PREFLIGHT_FAILED`.
 
-Central assets có thể cấu hình bằng `AUDIT_GUIDELINE_PATH`, `AUDIT_GUIDELINE_VERSION`, `AUDIT_TEMPLATE_PATH`, `AUDIT_TEMPLATE_VERSION`; version được freeze theo từng run. Khi không cấu hình, renderer dùng builtin defaults.
+Guidelines và template được quản lý qua `/central-knowledge`. Upload cùng tên
+overwrite bản hiện hành nhưng không ảnh hưởng Audit job đã enqueue vì job dùng
+immutable copy theo content hash. Samples được lấy từ source snapshot của project.
 
-Worker materialize immutable AWP/APM/Process Understanding/Process SOP và chạy tám stage `PARSING → CONTEXT → CONSTRAINTS → DRAFTING → CRITIQUING → STYLING → VALIDATING → RENDERING`. Audit tạo output revision cho version hiện tại, không tạo audit version mới.
+Worker materialize immutable AWP/APM/Process Understanding/Process SOP/Samples, central Guidelines và template rồi chạy tám stage `PARSING → CONTEXT → CONSTRAINTS → DRAFTING → CRITIQUING → STYLING → VALIDATING → RENDERING`. Audit tạo output revision cho version hiện tại, không tạo audit version mới.
 
 **Output — `202 Job`:** `job_type = AUDIT`, state `QUEUED`.
 
@@ -1182,4 +1255,5 @@ Audit/output đã chạy end-to-end qua local adapter. UAT sign-off vẫn cần 
 | 422 | `SESSION_NOT_READY` | Promote trước khi validation pass |
 | 422 | `INVALID_ISSUE` | Issue business fields không hợp lệ |
 | 422 | `INVALID_DISPOSITION` | Review status/transition không hợp lệ |
-| 422 | `AUDIT_PREFLIGHT_FAILED` | Candidate rỗng/không hợp lệ hoặc `issue_revision` cũ |
+| 422 | `AUDIT_PREFLIGHT_FAILED` | Candidate rỗng/không hợp lệ, `issue_revision` cũ hoặc central knowledge chưa sẵn sàng |
+| 404 | `CENTRAL_ASSET_NOT_FOUND` | Central Guideline/template không tồn tại |

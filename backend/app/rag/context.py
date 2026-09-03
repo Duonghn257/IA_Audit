@@ -6,10 +6,6 @@ from dataclasses import dataclass
 from app.documents.parsers import ParsedDoc
 
 
-HELD_OUT_FILENAMES: set[str] = {
-    "FY2024 Audit of CDL Zenith Pte Ltd (Lumina Grand).pdf",
-}
-
 FOLDER_TO_TAG = {
     "APM": "APM",
     "AWP": "AWP",
@@ -41,8 +37,6 @@ def build_context(parsed: list[ParsedDoc]) -> ContextBlobs:
     """Group parsed artefacts by role tag and concatenate within each group."""
     blobs: dict[str, list[str]] = {tag: [] for tag in FOLDER_TO_TAG.values()}
     for d in parsed:
-        if d.filename in HELD_OUT_FILENAMES:
-            continue
         tag = FOLDER_TO_TAG.get(d.folder)
         if tag is None:
             continue

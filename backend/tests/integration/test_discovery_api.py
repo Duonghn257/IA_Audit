@@ -44,6 +44,9 @@ def _source_payloads() -> dict[str, bytes]:
         "audit-project/Process SOP/criteria.docx": (
             _docx_bytes("Expected control")
         ),
+        "audit-project/Samples/approved-report.docx": (
+            _docx_bytes("Approved prior audit wording")
+        ),
     }
 
 
@@ -96,6 +99,7 @@ class SuccessfulDiscoveryEngine:
             LogicalRole.RISK_CONTEXT,
             LogicalRole.EVIDENCE,
             LogicalRole.CRITERIA,
+            LogicalRole.SAMPLE,
         }
         assert all(document.local_path.is_file() for document in documents)
         return (
@@ -283,3 +287,23 @@ def test_default_discovery_engine_fails_as_durable_job(
         ).json()
         assert job["state"] == "FAILED"
         assert "AI discovery engine is not configured" in job["error"]
+
+
+def test_source_tree_includes_optional_project_samples(tmp_path: Path) -> None:
+    app = create_app(settings=_settings(tmp_path))
+    with TestClient(app) as client:
+        project_id, _ = _create_project(client)
+        response = client.get(
+            f"/api/v1/projects/{project_id}/source-documents"
+        )
+        assert response.status_code == 200, response.text
+        folders = {
+            folder["logical_role"]: folder
+            for folder in response.json()["folders"]
+        }
+        assert folders["SAMPLE"]["name"] == "Samples"
+        assert folders["SAMPLE"]["file_count"] == 1
+        assert folders["SAMPLE"]["files"][0]["name"] == (
+            "approved-report.docx"
+        )
+    app.state.database.dispose()

@@ -429,7 +429,7 @@ review/final validation và giữ `origin = MANUAL`.
 |---|---|
 | `upload_validation.json` | Folder tree, detected roles, file-level errors/warnings và allowed actions trước Create project |
 | `document_manifest.json` | File inventory, role, hash, version, parse status |
-| Central asset registry | Approved Guidelines/template ID, version, effective status và audit history |
+| Central knowledge registry | Current Guidelines/template ID, object key, content hash và upload metadata |
 | `parsed_units.jsonl` | Text/table units kèm document location |
 | `scope_map.json` | Entities, scope, objectives, risks, controls |
 | `evidence_facts.jsonl` | Expected/actual facts kèm exact source refs |
@@ -488,7 +488,7 @@ Vector database là tùy chọn. Với một project nhỏ, PostgreSQL full-text
 | SOP và thực tế mâu thuẫn nhưng chưa rõ version/date | Flag contradiction |
 | Không tìm thấy gap | Ghi “no gap identified from available evidence”, không ghi “control effective” |
 | AI đề xuất risk rating | Hiển thị là optional recommendation; auditor có thể giữ, đổi hoặc để trống |
-| Central Samples chứa finding cũ | Chỉ học style, không dùng finding cũ làm evidence |
+| Project Samples chứa finding cũ | Chỉ dùng tone, wording và structure context; không dùng finding cũ làm evidence |
 | Issue ngoài AWP scope | Đưa vào out-of-scope queue, không render |
 
 ## 11. Security và governance
@@ -579,7 +579,7 @@ indeterminate thay vì phần trăm giả.
 
 Đã chốt:
 
-1. Guidelines và Samples/template do app quản lý tập trung, có version.
+1. Guidelines và `template.docx` do app quản lý tập trung theo bộ hiện hành; `Samples/` đi cùng immutable project source.
 2. AI candidate bắt buộc có cả evidence và criteria; manual issue không bắt buộc.
 3. `risk_category` optional; AI suggest và auditor có thể đổi hoặc để trống.
 4. UAT hỗ trợ create/edit/reject; Merge/Split UI không thuộc phạm vi.

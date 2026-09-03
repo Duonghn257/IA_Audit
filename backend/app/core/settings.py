@@ -28,10 +28,6 @@ class ApiSettings:
     auth_session_ttl_hours: int = 12
     auth_cookie_name: str = "audit_session"
     auth_cookie_secure: bool = False
-    audit_guideline_path: Path | None = None
-    audit_guideline_version: str = "builtin-default"
-    audit_template_path: Path | None = None
-    audit_template_version: str = "builtin-default"
 
     @property
     def google_auth_enabled(self) -> bool:
@@ -126,18 +122,6 @@ def load_api_settings() -> ApiSettings:
         "AUTH_COOKIE_SECURE",
         "true" if secure_default else "false",
     ).strip().lower() in {"1", "true", "yes", "on"}
-    audit_guideline_path = _optional_path(
-        os.environ.get("AUDIT_GUIDELINE_PATH")
-    )
-    audit_template_path = _optional_path(
-        os.environ.get("AUDIT_TEMPLATE_PATH")
-    )
-    audit_guideline_version = os.environ.get(
-        "AUDIT_GUIDELINE_VERSION", "builtin-default"
-    )
-    audit_template_version = os.environ.get(
-        "AUDIT_TEMPLATE_VERSION", "builtin-default"
-    )
     return ApiSettings(
         repository_root=repository_root,
         backend_root=backend_root,
@@ -157,17 +141,4 @@ def load_api_settings() -> ApiSettings:
         auth_session_ttl_hours=auth_session_ttl_hours,
         auth_cookie_name=auth_cookie_name,
         auth_cookie_secure=auth_cookie_secure,
-        audit_guideline_path=audit_guideline_path,
-        audit_guideline_version=audit_guideline_version,
-        audit_template_path=audit_template_path,
-        audit_template_version=audit_template_version,
     )
-
-
-def _optional_path(value: str | None) -> Path | None:
-    if not value:
-        return None
-    path = Path(value).expanduser().resolve()
-    if not path.is_file():
-        raise RuntimeError(f"Configured audit asset does not exist: {path}")
-    return path

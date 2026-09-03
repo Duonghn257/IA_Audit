@@ -42,6 +42,10 @@ def test_openapi_publishes_v2_workspace_contract(tmp_path: Path) -> None:
         "/api/v1/upload-sessions/{session_id}/files/{file_id}"
     ]
     assert "get" in paths["/api/v1/outputs/{output_id}/download"]
+    assert "get" in paths["/api/v1/central-knowledge"]
+    assert "post" in paths["/api/v1/central-knowledge/guidelines"]
+    assert "put" in paths["/api/v1/central-knowledge/template"]
+    assert "delete" in paths["/api/v1/central-knowledge/files/{asset_id}"]
     assert not any(path.startswith("/api/v1/runs") for path in paths)
 
     app.state.run_manager.shutdown()

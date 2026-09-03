@@ -120,6 +120,7 @@ def test_local_upload_session_validates_and_creates_v01(
             "RISK_CONTEXT": 1,
             "EVIDENCE": 1,
             "CRITERIA": 1,
+            "SAMPLE": 0,
         }
 
         promoted = client.post(
@@ -318,5 +319,6 @@ def test_upload_manifest_ignores_unsupported_files(tmp_path: Path) -> None:
 
     assert response.status_code == 201, response.text
     assert [item["relative_path"] for item in response.json()["files"]] == [
-        "audit-project/AWP/scope.docx"
+        "audit-project/AWP/scope.docx",
+        "audit-project/Samples/history.pdf",
     ]

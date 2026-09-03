@@ -1,6 +1,6 @@
 # Trạng thái Backend
 
-> Xác minh gần nhất: 27/08/2026
+> Xác minh gần nhất: 03/09/2026
 > Trạng thái bàn giao: POC đã triển khai
 > Source of truth: `backend/app/`
 
@@ -30,7 +30,7 @@ DOCX trong `app/documents`, còn context/retrieval boundary trong `app/rag`.
 | Chức năng | Trạng thái | Bằng chứng trong source |
 |---|---|---|
 | Versioned FastAPI API | Đã xong | `backend/app/api/` |
-| Upload-session local + validation | Đã xong | `audit_intake_service.py`, `local_intake_storage.py` |
+| Upload-session local + validation | Đã xong | AWP/APM/PU/SOP và optional project `Samples/` |
 | Persistent project metadata | Đã xong | `project_repository.py` |
 | Persistent progress events | Đã xong | `project_repository.py` |
 | Background project execution | Đủ cho POC | `ThreadPoolExecutor` trong `ProjectManager` |
@@ -38,10 +38,11 @@ DOCX trong `app/documents`, còn context/retrieval boundary trong `app/rag`.
 | Structured API errors | Đã xong | `api/errors.py`, correlation middleware |
 | Audit pipeline tám bước | Đã xong | `application/audit_pipeline.py` |
 | DOCX output download | Đã xong | Versioned `/outputs/{output_id}/download` |
-| Versioned Audit job từ DB candidates | Đã xong cho UAT local worker | `audit_execution_service.py`, frozen input snapshot, output revisions |
+| Central Guidelines/template CRUD | Đã xong cho local UAT | `/central-knowledge`, overwrite hiện hành, immutable job snapshot |
+| Versioned Audit job từ DB candidates | Đã xong cho UAT local worker | `audit_execution_service.py`, frozen issues/source/central knowledge, output revisions |
 | PostgreSQL support | Đã xong | SQLAlchemy + psycopg |
 | SQLite local fallback | Đã xong | Local development/tests |
-| Alembic migration | Đã xong | Head `20260812_02` |
+| Alembic migration | Đã xong | Head `20260903_06` |
 | Authentication/authorization | Chưa làm | Bắt buộc trước production |
 | Durable queue và recovery | Chưa làm | Worker hiện nằm trong API process |
 | S3 adapter | Chưa làm | Local intake adapter đang dùng cùng application port |

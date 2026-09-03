@@ -18,7 +18,7 @@ from app.core.config import load_config
 from app.documents.parsers import parse_folder, persist_parsed
 from app.documents.render import render
 from app.documents.template_inspector import inspect_templates
-from app.rag.context import HELD_OUT_FILENAMES, build_context
+from app.rag.context import build_context
 
 TOTAL_STEPS = 8
 
@@ -151,10 +151,7 @@ class AuditPipeline:
             )
 
             _emit(reporter, "PARSING", "Parsing project documents...", 0)
-            parsed = parse_folder(
-                project_path,
-                skip_filenames=HELD_OUT_FILENAMES,
-            )
+            parsed = parse_folder(project_path)
             persist_parsed(parsed, run_directory)
             _write_log(log, "parse", f"parsed {len(parsed)} files")
             _emit(
@@ -170,7 +167,7 @@ class AuditPipeline:
             _write_log(
                 log,
                 "context",
-                f"assembled {total_chars:,} chars; FY2024 held out",
+                f"assembled {total_chars:,} chars including project Samples",
             )
             for line in context.truncation_log:
                 _write_log(log, "context", f"WARN: {line}")
@@ -255,15 +252,6 @@ class AuditPipeline:
 
             _emit(reporter, "STYLING", "Producing DOCX style spec...", 5)
             template_paths = [project_path / "Output" / "template.docx"]
-            samples_directory = project_path / "Samples"
-            if samples_directory.is_dir():
-                template_paths.extend(
-                    sorted(
-                        path
-                        for path in samples_directory.glob("*.docx")
-                        if not path.name.startswith("~$")
-                    )
-                )
             template_analysis = inspect_templates(template_paths)
             if not template_analysis:
                 warning = "No template files found; using defaults"

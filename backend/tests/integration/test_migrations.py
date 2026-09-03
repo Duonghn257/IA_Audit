@@ -27,6 +27,7 @@ def test_migrations_create_uat_workspace_schema(tmp_path, monkeypatch) -> None:
     schema = inspect(engine)
     assert set(schema.get_table_names()) == {
         "alembic_version",
+        "central_assets",
         "audit_input_snapshots",
         "auth_sessions",
         "auth_users",

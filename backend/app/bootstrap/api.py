@@ -14,11 +14,11 @@ from app.api.router import api_v1_router
 from app.api.routes.auth import callback_alias_router
 from app.application.audit_execution_service import (
     AuditExecutionService,
-    CentralAuditAssets,
     PipelineRunner,
 )
 from app.application.audit_intake_service import AuditIntakeService
 from app.application.audit_workspace_service import AuditWorkspaceService
+from app.application.central_knowledge_service import CentralKnowledgeService
 from app.application.auth_service import AuthService
 from app.application.discovery_service import (
     DiscoveryEngine,
@@ -32,12 +32,18 @@ from app.core.settings import ApiSettings, load_api_settings
 from app.infrastructure.audit_intake_repository import (
     SqlAlchemyAuditIntakeRepository,
 )
+from app.infrastructure.central_knowledge_repository import (
+    SqlAlchemyCentralKnowledgeRepository,
+)
 from app.infrastructure.audit_repository import SqlAlchemyAuditRepository
 from app.infrastructure.auth_repository import SqlAlchemyAuthRepository
 from app.infrastructure.database import Database
 from app.infrastructure.google_oauth import GoogleOAuthClient
 from app.infrastructure.local_intake_storage import (
     LocalAuditIntakeStorage,
+)
+from app.infrastructure.local_central_knowledge_storage import (
+    LocalCentralKnowledgeStorage,
 )
 from app.infrastructure.project_repository import (
     SqlAlchemyProjectRepository,
@@ -54,6 +60,7 @@ def create_app(
     audit_workspace_service: AuditWorkspaceService | None = None,
     audit_intake_service: AuditIntakeService | None = None,
     audit_execution_service: AuditExecutionService | None = None,
+    central_knowledge_service: CentralKnowledgeService | None = None,
     audit_pipeline: PipelineRunner | None = None,
     discovery_service: DiscoveryService | None = None,
     discovery_engine: DiscoveryEngine | None = None,
@@ -125,6 +132,20 @@ def create_app(
     else:
         runtime_discovery_service = discovery_service
 
+    if central_knowledge_service is None:
+        if database is None:
+            database = Database(runtime_settings.database_url)
+            database.create_schema()
+        runtime_central_knowledge_service = CentralKnowledgeService(
+            SqlAlchemyCentralKnowledgeRepository(database.sessions),
+            LocalCentralKnowledgeStorage(
+                runtime_settings.storage_root / "central-knowledge"
+            ),
+            max_file_bytes=runtime_settings.upload_max_bytes,
+        )
+    else:
+        runtime_central_knowledge_service = central_knowledge_service
+
     if audit_execution_service is None:
         if database is None:
             database = Database(runtime_settings.database_url)
@@ -134,13 +155,8 @@ def create_app(
             LocalAuditIntakeStorage(
                 runtime_settings.storage_root / "uat-intake"
             ),
+            knowledge=runtime_central_knowledge_service,
             pipeline=audit_pipeline,
-            assets=CentralAuditAssets(
-                guideline_path=runtime_settings.audit_guideline_path,
-                guideline_version=runtime_settings.audit_guideline_version,
-                template_path=runtime_settings.audit_template_path,
-                template_version=runtime_settings.audit_template_version,
-            ),
         )
     else:
         runtime_audit_execution_service = audit_execution_service
@@ -192,6 +208,9 @@ def create_app(
     application.state.discovery_service = runtime_discovery_service
     application.state.audit_execution_service = (
         runtime_audit_execution_service
+    )
+    application.state.central_knowledge_service = (
+        runtime_central_knowledge_service
     )
     application.state.auth_service = runtime_auth_service
     application.state.google_oauth_client = runtime_google_oauth_client

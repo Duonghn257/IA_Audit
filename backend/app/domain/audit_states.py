@@ -74,6 +74,7 @@ class LogicalRole(StrEnum):
     RISK_CONTEXT = "RISK_CONTEXT"
     EVIDENCE = "EVIDENCE"
     CRITERIA = "CRITERIA"
+    SAMPLE = "SAMPLE"
     CONTEXT = "CONTEXT"
 
 

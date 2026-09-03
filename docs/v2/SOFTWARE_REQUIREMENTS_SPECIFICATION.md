@@ -68,7 +68,7 @@ DOCX sau khi tải xuống.
 | DEC-08 | Upload/Create project thành công phải tạo ngay audit version `v0.1`; version này tồn tại độc lập với discovery/Audit/DOCX status. |
 | DEC-09 | Nút **+ New audit** tạo `v0.2+` theo sequence toàn project và lưu `base_version_id`; không yêu cầu version trước đã Audit thành công hoặc có DOCX. |
 | DEC-10 | Nút **Audit** không tăng version; nó đóng băng input và gắn output DOCX vào current version. Filename phải chứa đúng current version. |
-| DEC-11 | Guidelines và Samples/template chuẩn do app quản lý tập trung, có version; file cùng loại do user upload không được dùng làm authority. |
+| DEC-11 | Guidelines và `template.docx` do app quản lý tập trung theo một bộ hiện hành; upload cùng tên overwrite bản cũ. `Samples/` là source context riêng của từng project, được đóng băng cùng source snapshot và không được dùng làm evidence/criteria. |
 | DEC-12 | AI-discovered candidate bắt buộc có ít nhất một `EVIDENCE` ref và một `CRITERIA` ref; manual issue không bắt buộc hai ref này để Audit. |
 | DEC-13 | `risk_category` là optional; AI gợi ý và auditor có thể giữ, đổi hoặc để trống. |
 | DEC-14 | UAT chỉ hỗ trợ `.docx`, `.pdf`, `.xlsx`; mỗi Project artefact folder tối đa 20 files và tổng dung lượng tối đa 100 MB. |
@@ -229,15 +229,17 @@ của version, còn revision cũ được giữ trong audit trail.
 | Risk context | `APM/` | Bắt buộc, ít nhất một file được hỗ trợ và đọc được |
 | Actual/evidence | `Process Understanding/` | Bắt buộc, ít nhất một file được hỗ trợ và đọc được |
 | Criteria | `Process SOP/` | Bắt buộc cho AI discovery, ít nhất một criteria source được hỗ trợ và đọc được |
+| Sample | `Samples/` | Không bắt buộc; dùng làm context tham khảo tone, wording và structure của riêng project |
 
 Tên folder là mapping mặc định, không nên là business rule cứng trong pipeline.
 Administrator có thể cấu hình alias và required role mà không đổi code.
 
-`Guidelines` và `Samples/template` không còn là project artefacts. App quản lý
-tập trung các asset chuẩn này, có ID/version, effective status và audit trail.
-Mỗi Audit run phải ghi guideline/template version đã dùng. Nếu folder upload có
-file hoặc folder cùng tên, hệ thống hiển thị warning và không dùng chúng thay
-cho asset trung tâm.
+`Guidelines` và `template.docx` không phải project artefacts. App quản lý một
+bộ hiện hành dùng chung; upload mới overwrite file cùng tên và người dùng có thể
+xóa qua central knowledge API. Mỗi Audit job vẫn đóng băng asset ID/hash và một
+bản copy nội bộ để retry tái lập đúng input. `Samples/` là project artefact
+optional, bất biến sau khi Create project và chỉ dùng làm drafting context,
+không phải evidence hoặc criteria.
 
 Allowlist UAT là `.docx`, `.pdf` và `.xlsx`. Tổng content length của một folder
 upload không được vượt quá **100 MB (100,000,000 bytes)** và tổng số file không
@@ -357,7 +359,7 @@ trong hai ref phải bị chặn khỏi Audit cho đến khi đủ nguồn.
 | FR-INT-006 | Sau Create project, source files phải bất biến. | Không có API/UI add/replace/delete source document. |
 | FR-INT-007 | Upload/create không được tự khởi động discovery. | Project kết thúc ở `READY_FOR_DISCOVERY`. |
 | FR-INT-008 | App phải áp dụng allowlist `.docx`, `.pdf`, `.xlsx`, tối đa 20 files và 100 MB/folder. | Folder có file thứ 21, vượt 100,000,000 bytes hoặc có format ngoài allowlist bị từ chối có reason. |
-| FR-INT-009 | App phải dùng Guidelines/template trung tâm đã version. | Project upload không thể override; run manifest ghi đúng asset versions. |
+| FR-INT-009 | App phải dùng Guidelines/template hiện hành do app quản lý tập trung và Samples thuộc project. | Project upload không thể override central assets; run manifest ghi đúng asset ID/hash; Samples nằm trong immutable source tree. |
 | FR-INT-010 | Create project phải tạo atomically audit version `v0.1`. | API response có current version `v0.1` dù discovery/Audit chưa chạy. |
 
 ### 9.2 Candidate discovery
@@ -617,7 +619,7 @@ Exit criteria:
 
 ### 15.1 Đã chốt cho baseline
 
-- Guidelines và Samples/template do app quản lý tập trung và có version.
+- Guidelines và `template.docx` dùng bộ hiện hành do app quản lý tập trung; `Samples/` là immutable source context theo project.
 - AI candidate cần cả evidence và criteria; manual issue không bắt buộc hai ref này.
 - `risk_category` optional, AI suggest và auditor có thể thay đổi.
 - Merge/Split UI deferred; UAT dùng create/edit/reject để đạt kết quả tương đương.

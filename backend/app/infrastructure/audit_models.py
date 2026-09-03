@@ -83,6 +83,21 @@ class SourceDocumentModel(Base):
     snapshot: Mapped[SourceSnapshotModel] = relationship(back_populates="documents")
 
 
+class CentralAssetModel(Base):
+    __tablename__ = "central_assets"
+    __table_args__ = (UniqueConstraint("kind", "filename"),)
+    asset_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    filename: Mapped[str] = mapped_column(String(512))
+    object_key: Mapped[str] = mapped_column(Text)
+    content_hash: Mapped[str] = mapped_column(String(128), index=True)
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    content_type: Mapped[str | None] = mapped_column(String(255))
+    uploaded_by: Mapped[str] = mapped_column(String(255), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class ProjectVersionModel(Base):
     __tablename__ = "project_versions"
     __table_args__ = (UniqueConstraint("project_id", "sequence_no"),)
