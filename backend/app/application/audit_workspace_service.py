@@ -149,8 +149,6 @@ class AuditWorkspaceService:
         observed_gap: str,
         title_hint: str | None,
         evidence_summary: str | None,
-        evidence_refs: Sequence[str],
-        sop_refs: Sequence[str],
         risk_category: RiskCategory | None,
         source_refs: Sequence[SourceReferenceInput],
     ) -> IssueRecord:
@@ -162,8 +160,6 @@ class AuditWorkspaceService:
             observed_gap=observed_gap,
             title_hint=title_hint,
             evidence_summary=evidence_summary,
-            evidence_refs=evidence_refs,
-            sop_refs=sop_refs,
             risk_category=risk_category,
             confidence=None,
             validation_flags=(),
@@ -176,30 +172,24 @@ class AuditWorkspaceService:
         issue_id: str,
         *,
         expected_row_version: int,
-        status: IssueStatus,
         observed_gap: str,
         title_hint: str | None,
         evidence_summary: str | None,
-        evidence_refs: Sequence[str],
-        sop_refs: Sequence[str],
         risk_category: RiskCategory | None,
-        confidence: float | None,
-        validation_flags: Sequence[str],
         source_refs: Sequence[SourceReferenceInput],
     ) -> IssueRecord:
+        current = self.get_issue(version_id, issue_id)
         return self._repository.update_issue(
             version_id,
             issue_id,
             expected_row_version=expected_row_version,
-            status=status,
+            status=current.status,
             observed_gap=observed_gap,
             title_hint=title_hint,
             evidence_summary=evidence_summary,
-            evidence_refs=evidence_refs,
-            sop_refs=sop_refs,
             risk_category=risk_category,
-            confidence=confidence,
-            validation_flags=validation_flags,
+            confidence=current.confidence,
+            validation_flags=current.validation_flags,
             source_refs=source_refs,
         )
 
@@ -223,7 +213,7 @@ class AuditWorkspaceService:
                 "REJECTED or OUT_OF_SCOPE."
             )
         current = self.get_issue(version_id, issue_id)
-        return self.update_issue(
+        return self._repository.update_issue(
             version_id,
             issue_id,
             expected_row_version=expected_row_version,
@@ -231,8 +221,6 @@ class AuditWorkspaceService:
             observed_gap=current.observed_gap,
             title_hint=current.title_hint,
             evidence_summary=current.evidence_summary,
-            evidence_refs=current.evidence_refs,
-            sop_refs=current.sop_refs,
             risk_category=current.risk_category,
             confidence=current.confidence,
             validation_flags=current.validation_flags,

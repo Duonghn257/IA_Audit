@@ -15,6 +15,7 @@ from app.domain.audit import (
     AuditStateError,
     AuditVersionNotFoundError,
     AuditVersionState,
+    compatibility_reference_lists,
     CandidateIssueInput,
     IssueOrigin,
     IssueStatus,
@@ -43,11 +44,13 @@ from app.infrastructure.audit_persistence import (
     get_project,
     get_snapshot,
     get_version,
+    source_ref_model,
     to_job_event_record,
     to_job_record,
     to_output_record,
     to_snapshot_record,
     touch_issue_workspace,
+    validate_source_refs,
     utcnow,
     version_state_from_outputs,
 )
@@ -296,17 +299,24 @@ class SqlAlchemyAuditJobRepository:
                 session.delete(issue)
             session.flush()
             for candidate in candidates:
+                validate_source_refs(
+                    session, job.project_id, candidate.source_refs
+                )
+                issue_id = str(uuid4())
+                evidence_refs, criteria_refs = compatibility_reference_lists(
+                    candidate.source_refs
+                )
                 session.add(
                     IssueModel(
-                        issue_id=str(uuid4()),
+                        issue_id=issue_id,
                         project_version_id=version.version_id,
                         origin=IssueOrigin.AI_DISCOVERED.value,
                         status=IssueStatus.READY_FOR_REVIEW.value,
                         title_hint=candidate.title_hint,
                         observed_gap=candidate.observed_gap,
                         evidence_summary=candidate.evidence_summary,
-                        evidence_refs=list(candidate.evidence_refs),
-                        sop_refs=list(candidate.sop_refs),
+                        evidence_refs=list(evidence_refs),
+                        sop_refs=list(criteria_refs),
                         risk_category=candidate.risk_category.value,
                         confidence=None,
                         validation_flags=[],
@@ -314,6 +324,10 @@ class SqlAlchemyAuditJobRepository:
                         created_at=now,
                         updated_at=now,
                     )
+                )
+                session.add_all(
+                    source_ref_model(reference, issue_id)
+                    for reference in candidate.source_refs
                 )
             touch_issue_workspace(session, version, now)
             if version.state != AuditVersionState.STALE_OUTPUT.value:

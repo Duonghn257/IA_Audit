@@ -108,8 +108,6 @@ def create_issue(
             observed_gap=request.observed_gap,
             title_hint=request.title_hint,
             evidence_summary=request.evidence_summary,
-            evidence_refs=request.evidence_refs,
-            sop_refs=request.sop_refs,
             risk_category=request.risk_category,
             source_refs=[item.to_domain() for item in request.source_refs],
         )
@@ -142,15 +140,10 @@ def update_issue(
             version_id,
             issue_id,
             expected_row_version=request.row_version,
-            status=request.status,
             observed_gap=request.observed_gap,
             title_hint=request.title_hint,
             evidence_summary=request.evidence_summary,
-            evidence_refs=request.evidence_refs,
-            sop_refs=request.sop_refs,
             risk_category=request.risk_category,
-            confidence=request.confidence,
-            validation_flags=request.validation_flags,
             source_refs=[item.to_domain() for item in request.source_refs],
         )
         return IssueResponse.from_domain(issue)

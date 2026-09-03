@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.domain.audit import (
     AuditIssueNotFoundError,
     AuditProjectRecord,
+    compatibility_reference_lists,
     AuditVersionNotFoundError,
     AuditVersionState,
     IssueOrigin,
@@ -138,8 +139,6 @@ class SqlAlchemyAuditWorkspaceRepository:
         observed_gap: str,
         title_hint: str | None = None,
         evidence_summary: str | None = None,
-        evidence_refs: Sequence[str] = (),
-        sop_refs: Sequence[str] = (),
         risk_category: RiskCategory | None = None,
         confidence: float | None = None,
         validation_flags: Sequence[str] = (),
@@ -147,6 +146,9 @@ class SqlAlchemyAuditWorkspaceRepository:
     ) -> IssueRecord:
         if not observed_gap.strip():
             raise ValueError("observed_gap must not be empty")
+        evidence_refs, criteria_refs = compatibility_reference_lists(
+            tuple(source_refs)
+        )
         now = utcnow()
         with self._sessions.begin() as session:
             version = get_version(session, version_id, lock=True)
@@ -160,7 +162,7 @@ class SqlAlchemyAuditWorkspaceRepository:
                 observed_gap=observed_gap,
                 evidence_summary=evidence_summary,
                 evidence_refs=list(evidence_refs),
-                sop_refs=list(sop_refs),
+                sop_refs=list(criteria_refs),
                 risk_category=risk_category.value if risk_category else None,
                 confidence=confidence,
                 validation_flags=list(validation_flags),
@@ -199,8 +201,6 @@ class SqlAlchemyAuditWorkspaceRepository:
         observed_gap: str,
         title_hint: str | None,
         evidence_summary: str | None,
-        evidence_refs: Sequence[str] = (),
-        sop_refs: Sequence[str] = (),
         risk_category: RiskCategory | None,
         confidence: float | None,
         validation_flags: Sequence[str],
@@ -208,6 +208,9 @@ class SqlAlchemyAuditWorkspaceRepository:
     ) -> IssueRecord:
         if not observed_gap.strip():
             raise ValueError("observed_gap must not be empty")
+        evidence_refs, criteria_refs = compatibility_reference_lists(
+            tuple(source_refs)
+        )
         now = utcnow()
         with self._sessions.begin() as session:
             issue = get_issue(session, issue_id, lock=True)
@@ -222,7 +225,7 @@ class SqlAlchemyAuditWorkspaceRepository:
             issue.title_hint = title_hint
             issue.evidence_summary = evidence_summary
             issue.evidence_refs = list(evidence_refs)
-            issue.sop_refs = list(sop_refs)
+            issue.sop_refs = list(criteria_refs)
             issue.risk_category = risk_category.value if risk_category else None
             issue.confidence = confidence
             issue.validation_flags = list(validation_flags)

@@ -26,6 +26,7 @@ from app.domain.audit import (
     AuditInputSnapshotRecord,
     AuditPreflightError,
     AuditProjectRecord,
+    compatibility_reference_lists,
     IssueOrigin,
     IssueRecord,
     IssueStatus,
@@ -36,6 +37,7 @@ from app.domain.audit import (
     OutputRevisionRecord,
     ProjectVersionRecord,
     SourceDocumentRecord,
+    SourceRefKind,
 )
 
 _ELIGIBLE_STATUSES = frozenset(
@@ -440,10 +442,19 @@ def _validate_issue(issue: IssueRecord) -> None:
         missing: list[str] = []
         if not (issue.evidence_summary or "").strip():
             missing.append("evidence_summary")
-        if not issue.evidence_refs:
-            missing.append("evidence_refs")
-        if not issue.sop_refs:
-            missing.append("sop_refs")
+        if issue.source_refs:
+            kinds = {reference.ref_kind for reference in issue.source_refs}
+            if SourceRefKind.EVIDENCE not in kinds:
+                missing.append("source_refs[EVIDENCE]")
+            if SourceRefKind.CRITERIA not in kinds:
+                missing.append("source_refs[CRITERIA]")
+        else:
+            # Existing rows created before source_refs became canonical remain
+            # auditable until their references are migrated by an edit.
+            if not issue.evidence_refs:
+                missing.append("source_refs[EVIDENCE]")
+            if not issue.sop_refs:
+                missing.append("source_refs[CRITERIA]")
         if missing:
             raise AuditPreflightError(
                 f"AI candidate {issue.issue_id} is missing: "
@@ -452,6 +463,12 @@ def _validate_issue(issue: IssueRecord) -> None:
 
 
 def _serialise_issue(issue: IssueRecord) -> dict[str, Any]:
+    evidence_refs = issue.evidence_refs
+    criteria_refs = issue.sop_refs
+    if issue.source_refs:
+        evidence_refs, criteria_refs = compatibility_reference_lists(
+            issue.source_refs
+        )
     return {
         "issue_id": issue.issue_id,
         "origin": issue.origin.value,
@@ -459,8 +476,8 @@ def _serialise_issue(issue: IssueRecord) -> dict[str, Any]:
         "title_hint": issue.title_hint,
         "observed_gap": issue.observed_gap,
         "evidence_summary": issue.evidence_summary,
-        "evidence_refs": list(issue.evidence_refs),
-        "sop_refs": list(issue.sop_refs),
+        "evidence_refs": list(evidence_refs),
+        "sop_refs": list(criteria_refs),
         "risk_category": (
             issue.risk_category.value if issue.risk_category else None
         ),

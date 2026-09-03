@@ -4,7 +4,13 @@ from pathlib import Path
 from app.application.discovery_service import DiscoveryDocument
 from app.bootstrap.api import create_app
 from app.core.settings import ApiSettings
-from app.domain.audit import CandidateIssueInput, LogicalRole, RiskCategory
+from app.domain.audit import (
+    CandidateIssueInput,
+    LogicalRole,
+    RiskCategory,
+    SourceReferenceInput,
+    SourceRefKind,
+)
 from docx import Document
 from fastapi.testclient import TestClient
 
@@ -102,6 +108,9 @@ class SuccessfulDiscoveryEngine:
             LogicalRole.SAMPLE,
         }
         assert all(document.local_path.is_file() for document in documents)
+        documents_by_role = {
+            document.logical_role: document for document in documents
+        }
         return (
             CandidateIssueInput(
                 title_hint="Access review evidence is incomplete",
@@ -111,10 +120,20 @@ class SuccessfulDiscoveryEngine:
                 evidence_summary=(
                     "The review workbook covered three of four profiles."
                 ),
-                evidence_refs=(
-                    "Process Understanding/evidence.docx - Review result",
+                source_refs=(
+                    SourceReferenceInput(
+                        reference_id="engine-evidence",
+                        ref_kind=SourceRefKind.EVIDENCE,
+                        document_id=documents_by_role[LogicalRole.EVIDENCE].document_id,
+                        location={"description": "Review result"},
+                    ),
+                    SourceReferenceInput(
+                        reference_id="engine-criteria",
+                        ref_kind=SourceRefKind.CRITERIA,
+                        document_id=documents_by_role[LogicalRole.CRITERIA].document_id,
+                        location={"description": "Section 3.2"},
+                    ),
                 ),
-                sop_refs=("Process SOP/criteria.docx - Section 3.2",),
                 risk_category=RiskCategory.OPERATIONAL,
             ),
         )
@@ -166,13 +185,21 @@ def test_discovery_job_persists_candidate_reference_arrays(
         assert candidate["origin"] == "AI_DISCOVERED"
         assert candidate["status"] == "READY_FOR_REVIEW"
         assert candidate["risk_category"] == "Operational"
+        source_refs = candidate["source_refs"]
+        assert [reference["ref_kind"] for reference in source_refs] == [
+            "EVIDENCE",
+            "CRITERIA",
+        ]
+        assert all(
+            reference["reference_id"].startswith("engine-") is False
+            for reference in source_refs
+        )
         assert candidate["evidence_refs"] == [
-            "Process Understanding/evidence.docx - Review result"
+            f'{source_refs[0]["document_id"]} - Review result'
         ]
         assert candidate["sop_refs"] == [
-            "Process SOP/criteria.docx - Section 3.2"
+            f'{source_refs[1]["document_id"]} - Section 3.2'
         ]
-        assert candidate["source_refs"] == []
 
         events = client.get(f"/api/v1/jobs/{job_id}/events")
         assert [item["stage"] for item in events.json()] == [
@@ -306,4 +333,141 @@ def test_source_tree_includes_optional_project_samples(tmp_path: Path) -> None:
         assert folders["SAMPLE"]["files"][0]["name"] == (
             "approved-report.docx"
         )
+    app.state.database.dispose()
+
+
+def test_manual_issue_crud_uses_tagged_source_references(tmp_path: Path) -> None:
+    app = create_app(settings=_settings(tmp_path))
+
+    with TestClient(app) as client:
+        project_id, version_id = _create_project(client)
+        tree = client.get(
+            f"/api/v1/projects/{project_id}/source-documents"
+        )
+        assert tree.status_code == 200, tree.text
+        documents = {
+            file["logical_role"]: file
+            for folder in tree.json()["folders"]
+            for file in folder["files"]
+        }
+        issues_url = (
+            f"/api/v1/projects/{project_id}/versions/{version_id}/issues"
+        )
+        create_refs = [
+            {
+                "ref_kind": "EVIDENCE",
+                "document_id": documents["EVIDENCE"]["document_id"],
+                "location": {"sheet": "Access Review", "range": "A1:B12"},
+                "quote": "Review completed by control owner",
+            },
+            {
+                "ref_kind": "CRITERIA",
+                "document_id": documents["CRITERIA"]["document_id"],
+                "location": {"description": "Section 3.2"},
+            },
+        ]
+        created_response = client.post(
+            issues_url,
+            json={
+                "observed_gap": "Quarterly access review was incomplete.",
+                "source_refs": create_refs,
+            },
+        )
+        assert created_response.status_code == 201, created_response.text
+        created = created_response.json()
+        assert [item["ref_kind"] for item in created["source_refs"]] == [
+            "EVIDENCE",
+            "CRITERIA",
+        ]
+        assert all(item["reference_id"] for item in created["source_refs"])
+        assert created["evidence_refs"] == [
+            documents["EVIDENCE"]["document_id"]
+            + ' - {"range":"A1:B12","sheet":"Access Review"}'
+        ]
+        assert created["sop_refs"] == [
+            documents["CRITERIA"]["document_id"] + " - Section 3.2"
+        ]
+
+        fetched = client.get(f'{issues_url}/{created["issue_id"]}')
+        assert fetched.status_code == 200, fetched.text
+        assert fetched.json()["source_refs"] == created["source_refs"]
+
+        update_refs = [
+            {
+                "ref_kind": "CRITERIA",
+                "document_id": documents["SCOPE"]["document_id"],
+                "location": {"description": "Control objective 1"},
+            }
+        ]
+        updated_response = client.put(
+            f'{issues_url}/{created["issue_id"]}',
+            json={
+                "row_version": created["row_version"],
+                "observed_gap": "Quarterly access review remained incomplete.",
+                "source_refs": update_refs,
+                "status": "REJECTED",
+                "confidence": 0.01,
+                "validation_flags": ["client-must-not-own-this"],
+            },
+        )
+        assert updated_response.status_code == 200, updated_response.text
+        updated = updated_response.json()
+        assert updated["row_version"] == created["row_version"] + 1
+        assert updated["status"] == "DRAFT"
+        assert updated["confidence"] is None
+        assert updated["validation_flags"] == []
+        assert [item["ref_kind"] for item in updated["source_refs"]] == [
+            "CRITERIA"
+        ]
+        assert updated["evidence_refs"] == []
+        assert updated["sop_refs"] == [
+            documents["SCOPE"]["document_id"] + " - Control objective 1"
+        ]
+
+        invalid_tag = client.post(
+            issues_url,
+            json={
+                "observed_gap": "Invalid tagged reference.",
+                "source_refs": [
+                    {
+                        **create_refs[0],
+                        "ref_kind": "SOP",
+                    }
+                ],
+            },
+        )
+        assert invalid_tag.status_code == 422
+
+        sample_reference = client.post(
+            issues_url,
+            json={
+                "observed_gap": "Samples cannot prove a new issue.",
+                "source_refs": [
+                    {
+                        "ref_kind": "EVIDENCE",
+                        "document_id": documents["SAMPLE"]["document_id"],
+                        "location": {},
+                    }
+                ],
+            },
+        )
+        assert sample_reference.status_code == 422
+        assert sample_reference.json()["error"]["code"] == "INVALID_REQUEST"
+
+        unknown_document = client.post(
+            issues_url,
+            json={
+                "observed_gap": "Reference is outside this project.",
+                "source_refs": [
+                    {
+                        "ref_kind": "CRITERIA",
+                        "document_id": "unknown-document",
+                        "location": {},
+                    }
+                ],
+            },
+        )
+        assert unknown_document.status_code == 422
+        assert unknown_document.json()["error"]["code"] == "INVALID_REQUEST"
+
     app.state.database.dispose()

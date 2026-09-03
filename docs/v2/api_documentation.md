@@ -121,7 +121,7 @@ paginate trong UAT.
 
 ### 2.5 Optimistic concurrency
 
-Mỗi issue có `row_version`. `PATCH issue` và `disposition` phải gửi đúng
+Mỗi issue có `row_version`. `PUT issue` và `disposition` phải gửi đúng
 `row_version` client đang thấy. Nếu issue đã bị request khác sửa, API trả
 `409 ROW_VERSION_CONFLICT`; client reload issue rồi cho người dùng thử lại.
 
@@ -174,11 +174,11 @@ Với cùng scope và `Idempotency-Key`:
 | READY | `GET` | `/projects/{project_id}/versions` | List audit version | `200 ProjectVersion[]` |
 | READY | `POST` | `/projects/{project_id}/versions` | Tạo `v0.N` từ base version | `201 ProjectVersion` |
 | READY | `GET` | `/projects/{project_id}/versions/{version_id}` | Workspace snapshot của version | `200 ProjectVersion` |
-| TARGET | `GET` | `/projects/{project_id}/versions/{version_id}/issues` | List/filter issue | `200 IssuePage` |
+| READY | `GET` | `/projects/{project_id}/versions/{version_id}/issues` | List issue của version | `200 Issue[]` |
 | READY | `POST` | `/projects/{project_id}/versions/{version_id}/issues` | Tạo manual issue | `201 Issue` |
 | READY | `GET` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}` | Đọc một issue | `200 Issue` |
-| TARGET | `PATCH` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}` | Autosave business fields | `200 Issue` |
-| TARGET | `POST` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}/disposition` | Ghi quyết định review | `200 Issue` |
+| READY | `PUT` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}` | Thay full business content và source refs | `200 Issue` |
+| READY | `POST` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}/disposition` | Ghi quyết định review | `200 Issue` |
 
 ### 3.3 Discovery, Audit, job và output
 
@@ -364,6 +364,10 @@ cấp project: `v0.1`, `v0.2`, ...
 
 ### 4.5 Issue và SourceReference
 
+`source_refs` là collection canonical duy nhất cho evidence và criteria. Mỗi
+reference mang `ref_kind = EVIDENCE | CRITERIA`; frontend không duy trì hai
+mảng riêng theo tag.
+
 ```json
 {
   "issue_id": "iss_01J5...",
@@ -373,12 +377,6 @@ cấp project: `v0.1`, `v0.2`, ...
   "observed_gap": "Quarterly access review evidence was not retained.",
   "title_hint": "Access review evidence retention",
   "evidence_summary": "One of four quarterly review packages was unavailable.",
-  "evidence_refs": [
-    "Process Understanding/Access Review.xlsx - Sheet Review"
-  ],
-  "sop_refs": [
-    "Process SOP/Access Review SOP.docx - Section 3.2"
-  ],
   "risk_category": "Operational",
   "confidence": 0.86,
   "validation_flags": [],
@@ -387,14 +385,30 @@ cấp project: `v0.1`, `v0.2`, ...
     {
       "reference_id": "ref_01J5...",
       "ref_kind": "EVIDENCE",
-      "document_id": "doc_01J5...",
+      "document_id": "doc_evidence_01J5...",
       "unit_id": "unit_01J5...",
       "location": {
         "sheet": "Access Review",
         "range": "A1:B12"
       },
       "quote": "Review completed by control owner"
+    },
+    {
+      "reference_id": "ref_01J6...",
+      "ref_kind": "CRITERIA",
+      "document_id": "doc_criteria_01J5...",
+      "unit_id": null,
+      "location": {
+        "description": "Section 3.2"
+      },
+      "quote": null
     }
+  ],
+  "evidence_refs": [
+    "doc_evidence_01J5... - {\"range\":\"A1:B12\",\"sheet\":\"Access Review\"}"
+  ],
+  "sop_refs": [
+    "doc_criteria_01J5... - Section 3.2"
   ],
   "created_at": "2026-08-21T09:05:00Z",
   "updated_at": "2026-08-21T09:20:00Z"
@@ -403,18 +417,21 @@ cấp project: `v0.1`, `v0.2`, ...
 
 | Field | Rule |
 |---|---|
-| `origin` | `AI_DISCOVERED | MANUAL`; không đổi sau khi tạo |
-| `status` | `DRAFT | READY_FOR_REVIEW | APPROVED | NEEDS_EVIDENCE | REJECTED | OUT_OF_SCOPE` |
+| `origin` | `AI_DISCOVERED | MANUAL`; backend set khi tạo và không cho content update thay đổi |
+| `status` | `DRAFT | READY_FOR_REVIEW | APPROVED | NEEDS_EVIDENCE | REJECTED | OUT_OF_SCOPE`; thay đổi qua disposition API |
 | `observed_gap` | Required, không được blank |
 | `title_hint` | AI candidate required; manual draft optional |
 | `evidence_summary` | AI candidate required; manual issue optional |
-| `risk_category` | AI candidate required; manual issue optional; nếu có phải là `Compliance | Operational | Strategic | Financial` |
-| `confidence` | `0..1`, AI-owned; manual issue có thể `null` |
-| `evidence_refs` | Discovery candidate cần ít nhất một evidence reference string |
-| `sop_refs` | Discovery candidate cần ít nhất một SOP/criteria reference string |
-| `source_refs` | Compatibility view cho client cũ; frontend mới tự gộp hai mảng trên khi cần hiển thị |
-| `location` | Object theo loại file: page/section hoặc sheet/range |
+| `risk_category` | Optional; nếu có phải là `Compliance | Operational | Strategic | Financial` |
+| `confidence`, `validation_flags` | System/AI-owned; content update không nhận các field này |
+| `source_refs` | Canonical writable collection. AI candidate bắt buộc có ít nhất một ref cho mỗi tag; manual issue có thể để rỗng |
+| `reference_id` | Server-generated, chỉ có trong response; client không gửi khi create/update |
+| `ref_kind` | Bắt buộc, chỉ nhận `EVIDENCE` hoặc `CRITERIA` |
+| `document_id` | Bắt buộc, phải thuộc immutable source snapshot của project; document role `SAMPLE` không được dùng |
+| `unit_id` | Optional parsed-unit identifier |
+| `location` | Object tùy loại file, ví dụ page/section hoặc sheet/range; mặc định `{}` |
 | `quote` | Optional short excerpt; không thay thế document provenance |
+| `evidence_refs`, `sop_refs` | Deprecated response-only compatibility views do backend derive từ `source_refs`; client mới không gửi hai field này |
 
 ### 4.6 Job và JobEvent
 
@@ -746,6 +763,10 @@ folder, file, logical role và trạng thái xử lý.
 mỗi folder sort theo `relative_path`. Response không trả object key hoặc
 content hash nội bộ.
 
+Frontend dùng `files[].document_id` làm value cho từng dòng Source Reference và
+có thể dùng `name`, `relative_path`, `logical_role` làm label/filter. Không dùng
+file có `logical_role = SAMPLE` trong issue reference payload.
+
 **Lỗi chính:** `404 PROJECT_NOT_FOUND`. Project của user khác cũng trả
 `PROJECT_NOT_FOUND` để tránh cross-project disclosure.
 
@@ -827,27 +848,19 @@ actions của một version.
 
 ### 8.1 GET `/projects/{project_id}/versions/{version_id}/issues`
 
-**Mục đích:** tải Issue Register.
+**Mục đích:** tải toàn bộ Issue Register của version.
 
-**Input query:**
+**Input:** path `project_id`, `version_id`; runtime hiện không có filter hoặc
+pagination query.
 
-| Field | Type | Default | Ý nghĩa |
-|---|---|---:|---|
-| `status` | IssueStatus[] | null | Filter một hoặc nhiều status |
-| `origin` | IssueOrigin | null | `AI_DISCOVERED` hoặc `MANUAL` |
-| `search` | string | null | Tìm trong title/gap |
-| `limit` | integer | 50 | Page size |
-| `cursor` | string | null | Cursor trang tiếp theo |
-
-**Output — `200 IssuePage`:** `items: Issue[]` và `page`.
+**Output — `200 Issue[]`:** danh sách tăng dần theo `created_at`, sau đó
+`issue_id`. Mỗi issue chứa collection `source_refs` normalized.
 
 **Lỗi chính:** `404 PROJECT_NOT_FOUND`, `404 VERSION_NOT_FOUND`.
 
 ### 8.2 POST `/projects/{project_id}/versions/{version_id}/issues`
 
 **Mục đích:** tạo manual issue trong selected version.
-
-**Headers:** `Idempotency-Key` required.
 
 **Input:**
 
@@ -858,21 +871,46 @@ actions của một version.
   "evidence_summary": null,
   "risk_category": "Compliance",
   "status": "DRAFT",
-  "source_refs": []
+  "source_refs": [
+    {
+      "ref_kind": "EVIDENCE",
+      "document_id": "doc_01J5...",
+      "unit_id": null,
+      "location": {
+        "sheet": "Access Review",
+        "range": "A1:B12"
+      },
+      "quote": "Review completed by control owner"
+    },
+    {
+      "ref_kind": "CRITERIA",
+      "document_id": "doc_01J6...",
+      "unit_id": null,
+      "location": {
+        "description": "Section 3.2"
+      },
+      "quote": null
+    }
+  ]
 }
 ```
 
-`observed_gap` là field duy nhất bắt buộc cho manual issue. Backend luôn set
-`origin = MANUAL`; client không được gửi `origin`, `confidence`,
-`validation_flags` hoặc ID/timestamp.
+`observed_gap` là field duy nhất bắt buộc cho manual issue. `source_refs` là
+optional và mặc định `[]`. Backend set `origin = MANUAL`, `confidence = null`,
+`validation_flags = []`, cấp `issue_id`, `reference_id` và timestamps.
 
-`risk_category` có thể `null` với manual issue; nếu có giá trị thì chỉ nhận
-`Compliance`, `Operational`, `Strategic` hoặc `Financial`.
+Frontend lấy `document_id`, tên file và logical role từ
+`GET /projects/{project_id}/source-documents`. `document_id` phải thuộc project
+hiện tại; file trong folder/role `SAMPLE` không được gắn làm evidence hoặc
+criteria.
+
+Client không gửi `evidence_refs` hoặc `sop_refs`. Hai field deprecated này chỉ
+xuất hiện trong response và do backend derive từ `source_refs`.
 
 **Output — `201 Issue`:** `row_version = 1`.
 
-**Lỗi chính:** `404 VERSION_NOT_FOUND`, `409 INVALID_STATE`,
-`422 INVALID_ISSUE`.
+**Lỗi chính:** `404 VERSION_NOT_FOUND`, `422 INVALID_REQUEST` hoặc validation
+error khi tag/document/reference payload không hợp lệ.
 
 ### 8.3 GET `/projects/{project_id}/versions/{version_id}/issues/{issue_id}`
 
@@ -885,9 +923,10 @@ actions của một version.
 **Lỗi chính:** `404 PROJECT_NOT_FOUND`, `404 VERSION_NOT_FOUND`,
 `404 ISSUE_NOT_FOUND`.
 
-### 8.4 PATCH `/projects/{project_id}/versions/{version_id}/issues/{issue_id}`
+### 8.4 PUT `/projects/{project_id}/versions/{version_id}/issues/{issue_id}`
 
-**Mục đích:** autosave business fields mà không gửi lại toàn bộ resource.
+**Mục đích:** thay toàn bộ business content của issue, bao gồm collection
+`source_refs`, với optimistic concurrency.
 
 **Input:**
 
@@ -895,6 +934,7 @@ actions của một version.
 {
   "row_version": 3,
   "observed_gap": "Quarterly access review evidence was incomplete and not retained.",
+  "title_hint": "Access review evidence retention",
   "evidence_summary": "One of four quarterly reviews was unavailable.",
   "risk_category": "Strategic",
   "source_refs": [
@@ -914,16 +954,22 @@ actions của một version.
 
 | Field | Required | Rule |
 |---|---:|---|
-| `row_version` | Có | Integer `>= 1` |
-| `risk_category` | Không | `null` hoặc một trong `Compliance | Operational | Strategic | Financial` |
-| Business field cần đổi | Có ít nhất một | `title_hint`, `observed_gap`, `evidence_summary`, `risk_category`, `source_refs` |
-| `status` | Không | Dùng disposition API cho review decision |
-| `origin`, `confidence`, `validation_flags` | Không được gửi | System/AI-owned |
+| `row_version` | Có | Integer `>= 1`; stale value trả `ROW_VERSION_CONFLICT` |
+| `observed_gap` | Có | Full PUT yêu cầu non-blank value |
+| `title_hint`, `evidence_summary`, `risk_category` | Không | Có thể `null`; risk category phải thuộc enum hỗ trợ |
+| `source_refs` | Không | Mặc định `[]`; collection replacement, gửi `[]` để xóa toàn bộ references |
+| `status` | Không thuộc request | Dùng disposition API cho review decision |
+| `origin`, `confidence`, `validation_flags` | Không thuộc request | System/AI-owned và được giữ nguyên khi update content |
+| `evidence_refs`, `sop_refs` | Không thuộc request | Deprecated response-only compatibility views |
+
+Mỗi item trong `source_refs` dùng schema ở mục 4.5. Client không gửi
+`reference_id`; backend cấp ID mới cho collection đã thay thế và trả lại trong
+response.
 
 **Output — `200 Issue`:** issue mới với `row_version + 1`.
 
 **Lỗi chính:** `404 ISSUE_NOT_FOUND`, `409 ROW_VERSION_CONFLICT`,
-`409 INVALID_STATE`, `422 INVALID_ISSUE`.
+`409 INVALID_STATE`, `422 INVALID_REQUEST` hoặc validation error.
 
 Nếu version đang có output `CURRENT`, edit issue giữ file cũ nhưng chuyển
 output sang `STALE` và version sang `STALE_OUTPUT`.
@@ -937,14 +983,12 @@ output sang `STALE` và version sang `STALE_OUTPUT`.
 ```json
 {
   "row_version": 4,
-  "status": "APPROVED",
-  "comment": "Evidence and criteria verified."
+  "status": "APPROVED"
 }
 ```
 
 Status hợp lệ cho disposition:
 `APPROVED | NEEDS_EVIDENCE | REJECTED | OUT_OF_SCOPE`.
-`comment` optional trong UAT contract và được lưu vào audit trail.
 
 **Output — `200 Issue`:** issue sau transition và row version mới.
 
@@ -1170,33 +1214,16 @@ Bridge retirement conditions:
 4. frontend tải output bằng opaque output ID;
 5. UAT regression cho upload → review → Audit → download pass.
 
-### 11.1 Runtime-only endpoints đang chờ migration
+### 11.1 Ghi chú migration Issue update
 
-Path dưới đây vẫn xuất hiện trong OpenAPI runtime nhưng chưa thuộc
-contract đích:
+Runtime hiện hỗ trợ chính thức endpoint update issue bằng method `PUT` như mô
+tả tại mục 8.4. Payload chỉ gồm business content, `row_version` và
+`source_refs`; `status`, `confidence`, `validation_flags`, `evidence_refs` và
+`sop_refs` không thuộc request schema.
 
-| Method | Path | Input hiện tại | Output hiện tại | Migration |
-|---|---|---|---|---|
-| `PUT` | `/projects/{project_id}/versions/{version_id}/issues/{issue_id}` | Full payload gồm `row_version`, `observed_gap`, `title_hint`, `evidence_summary`, `risk_category`, `status`, `confidence`, `validation_flags`, `source_refs` | `200 Issue` | Thay bằng partial `PATCH`; system-owned fields không cho client ghi |
-
-Payload đầy đủ của `PUT issue` hiện tại:
-
-```json
-{
-  "row_version": 3,
-  "observed_gap": "Quarterly access review evidence was incomplete.",
-  "title_hint": "Access review evidence retention",
-  "evidence_summary": "One of four quarterly reviews was unavailable.",
-  "risk_category": "Financial",
-  "status": "READY_FOR_REVIEW",
-  "confidence": 0.86,
-  "validation_flags": [],
-  "source_refs": []
-}
-```
-
-Không build client mới dựa trên hai endpoint này. Chỉ remove sau khi frontend
-đã chuyển sang `PATCH` và nested output download.
+Partial `PATCH` có thể được bổ sung sau nếu frontend cần autosave từng field.
+Cho tới khi đó frontend phải gửi full business content và full replacement
+collection `source_refs` qua `PUT`.
 
 ### 11.2 API POC đã xoá
 
@@ -1220,7 +1247,7 @@ không phải public HTTP contract và vẫn được giữ.
 | Upload storage | Local adapter chạy end-to-end | Thêm S3 adapter, giữ nguyên service contract |
 | Project list/detail | Trả `ProjectBridge` | ProjectPage/ProjectDetail |
 | Issue list | Trả array | IssuePage có cursor |
-| Issue update | `PUT`, full editable payload | `PATCH`, partial business fields |
+| Issue update | `PUT`, full business-content replacement; system fields đã được bảo vệ | Có thể bổ sung `PATCH` nếu cần field-level autosave |
 | Disposition comment | Chưa có | Optional `comment` và audit trail |
 | Discovery | Durable `202 Job`; adapter mặc định fail có kiểm soát khi AI chưa cấu hình | Inject AI engine production |
 | Audit | Durable `202 Job`, frozen DB candidates, local background worker chạy pipeline 8 stage | Tách worker process/queue cho production |
@@ -1253,6 +1280,7 @@ Audit/output đã chạy end-to-end qua local adapter. UAT sign-off vẫn cần 
 | 415 | `UNSUPPORTED_FILE_TYPE` | Không phải DOCX/PDF/XLSX |
 | 422 | `INVALID_UPLOAD_MANIFEST` | Path/metadata/file count không hợp lệ |
 | 422 | `SESSION_NOT_READY` | Promote trước khi validation pass |
+| 422 | `INVALID_REQUEST` | Source reference dùng document không hợp lệ, ngoài snapshot hoặc thuộc `SAMPLE` |
 | 422 | `INVALID_ISSUE` | Issue business fields không hợp lệ |
 | 422 | `INVALID_DISPOSITION` | Review status/transition không hợp lệ |
 | 422 | `AUDIT_PREFLIGHT_FAILED` | Candidate rỗng/không hợp lệ, `issue_revision` cũ hoặc central knowledge chưa sẵn sàng |

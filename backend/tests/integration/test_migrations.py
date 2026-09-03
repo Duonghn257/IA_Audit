@@ -3,7 +3,11 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from app.core.settings import load_api_settings
-from sqlalchemy import create_engine, inspect
+from app.domain.audit import IssueOrigin, IssueStatus, SourceRefKind
+from app.infrastructure.audit_repository import SqlAlchemyAuditRepository
+from app.infrastructure.database import Database
+from sqlalchemy import create_engine, inspect, text
+from tests.unit.test_audit_repository import _create_project
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
@@ -71,3 +75,59 @@ def test_migrations_create_uat_workspace_schema(tmp_path, monkeypatch) -> None:
     engine.dispose()
 
     command.check(config)
+
+
+def test_unified_source_reference_migration_backfills_unambiguous_legacy_refs(
+    tmp_path, monkeypatch
+) -> None:
+    database_path = tmp_path / "legacy-references.db"
+    database_url = f"sqlite+pysqlite:///{database_path}"
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    config = Config(str(_BACKEND_ROOT / "alembic.ini"))
+    command.upgrade(config, "20260903_06")
+
+    database = Database(database_url)
+    repository = SqlAlchemyAuditRepository(database.sessions)
+    _, version_id = _create_project(repository)
+    repository.create_issue(
+        version_id,
+        issue_id="legacy-issue",
+        origin=IssueOrigin.AI_DISCOVERED,
+        status=IssueStatus.READY_FOR_REVIEW,
+        title_hint="Legacy issue",
+        observed_gap="Legacy gap",
+        evidence_summary="Legacy evidence summary",
+    )
+    with database.engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                UPDATE issues
+                SET evidence_refs = :evidence_refs,
+                    sop_refs = :sop_refs
+                WHERE issue_id = :issue_id
+                """
+            ),
+            {
+                "evidence_refs": '["Evidence/access-review.xlsx - Sheet A"]',
+                "sop_refs": '["access-review.xlsx - Section 3.2"]',
+                "issue_id": "legacy-issue",
+            },
+        )
+    database.dispose()
+
+    command.upgrade(config, "head")
+
+    migrated_database = Database(database_url)
+    migrated = SqlAlchemyAuditRepository(
+        migrated_database.sessions
+    ).get_issue(version_id, "legacy-issue")
+    assert [reference.ref_kind for reference in migrated.source_refs] == [
+        SourceRefKind.EVIDENCE,
+        SourceRefKind.CRITERIA,
+    ]
+    assert [reference.location for reference in migrated.source_refs] == [
+        {"description": "Sheet A"},
+        {"description": "Section 3.2"},
+    ]
+    migrated_database.dispose()

@@ -120,18 +120,41 @@ def require_upload_state(model: UploadSessionModel, expected: set[UploadSessionS
         raise AuditStateError(f"Upload session {model.session_id} is {model.state}, expected {values}.")
 
 
-def validate_source_refs(session: Session, project_id: str, source_refs: Sequence[SourceReferenceInput]) -> None:
+def validate_source_refs(
+    session: Session,
+    project_id: str,
+    source_refs: Sequence[SourceReferenceInput],
+) -> None:
     if not source_refs:
         return
+    if any(not reference.document_id.strip() for reference in source_refs):
+        raise ValueError("Source reference document_id must not be blank")
     snapshot = get_snapshot(session, project_id)
     document_ids = {reference.document_id for reference in source_refs}
-    found = set(session.scalars(select(SourceDocumentModel.document_id).where(
-        (SourceDocumentModel.snapshot_id == snapshot.snapshot_id)
-        & SourceDocumentModel.document_id.in_(document_ids)
-    )))
-    unknown = document_ids - found
+    documents = {
+        document_id: LogicalRole(logical_role)
+        for document_id, logical_role in session.execute(
+            select(
+                SourceDocumentModel.document_id,
+                SourceDocumentModel.logical_role,
+            ).where(
+                (SourceDocumentModel.snapshot_id == snapshot.snapshot_id)
+                & SourceDocumentModel.document_id.in_(document_ids)
+            )
+        )
+    }
+    unknown = document_ids - documents.keys()
     if unknown:
         raise ValueError(f"Unknown source documents: {sorted(unknown)}")
+    sample_documents = sorted(
+        document_id
+        for document_id, role in documents.items()
+        if role == LogicalRole.SAMPLE
+    )
+    if sample_documents:
+        raise ValueError(
+            f"Sample documents cannot be evidence or criteria: {sample_documents}"
+        )
 
 
 def source_ref_model(reference: SourceReferenceInput, issue_id: str) -> IssueSourceRefModel:

@@ -10,7 +10,7 @@ from app.domain.audit import SourceRefKind, SourceReferenceInput, SourceReferenc
 
 class SourceReferenceRequest(BaseModel):
     ref_kind: SourceRefKind
-    document_id: str
+    document_id: str = Field(min_length=1)
     unit_id: str | None = None
     location: dict[str, Any] = Field(default_factory=dict)
     quote: str | None = None

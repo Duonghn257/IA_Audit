@@ -6,24 +6,31 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.api.schemas.audit_common import SourceReferenceRequest, SourceReferenceResponse
-from app.domain.audit import IssueOrigin, IssueRecord, IssueStatus, RiskCategory
+from app.domain.audit import (
+    IssueOrigin,
+    IssueRecord,
+    IssueStatus,
+    RiskCategory,
+    compatibility_reference_lists,
+)
 
 
 class CreateManualIssueRequest(BaseModel):
     observed_gap: str = Field(min_length=1)
     title_hint: str | None = None
     evidence_summary: str | None = None
-    evidence_refs: list[str] = Field(default_factory=list)
-    sop_refs: list[str] = Field(default_factory=list)
     risk_category: RiskCategory | None = None
     status: IssueStatus = IssueStatus.DRAFT
     source_refs: list[SourceReferenceRequest] = Field(default_factory=list)
 
 
-class UpdateIssueRequest(CreateManualIssueRequest):
+class UpdateIssueRequest(BaseModel):
     row_version: int = Field(ge=1)
-    confidence: float | None = Field(default=None, ge=0, le=1)
-    validation_flags: list[str] = Field(default_factory=list)
+    observed_gap: str = Field(min_length=1)
+    title_hint: str | None = None
+    evidence_summary: str | None = None
+    risk_category: RiskCategory | None = None
+    source_refs: list[SourceReferenceRequest] = Field(default_factory=list)
 
 
 class IssueDispositionRequest(BaseModel):
@@ -39,8 +46,8 @@ class IssueResponse(BaseModel):
     observed_gap: str
     title_hint: str | None
     evidence_summary: str | None
-    evidence_refs: list[str]
-    sop_refs: list[str]
+    evidence_refs: list[str] = Field(deprecated=True)
+    sop_refs: list[str] = Field(deprecated=True)
     risk_category: RiskCategory | None
     confidence: float | None
     validation_flags: list[str]
@@ -51,6 +58,12 @@ class IssueResponse(BaseModel):
 
     @classmethod
     def from_domain(cls, value: IssueRecord) -> IssueResponse:
+        evidence_refs = value.evidence_refs
+        sop_refs = value.sop_refs
+        if value.source_refs:
+            evidence_refs, sop_refs = compatibility_reference_lists(
+                value.source_refs
+            )
         return cls(
             issue_id=value.issue_id,
             project_version_id=value.project_version_id,
@@ -59,8 +72,8 @@ class IssueResponse(BaseModel):
             observed_gap=value.observed_gap,
             title_hint=value.title_hint,
             evidence_summary=value.evidence_summary,
-            evidence_refs=list(value.evidence_refs),
-            sop_refs=list(value.sop_refs),
+            evidence_refs=list(evidence_refs),
+            sop_refs=list(sop_refs),
             risk_category=value.risk_category,
             confidence=value.confidence,
             validation_flags=value.validation_flags,

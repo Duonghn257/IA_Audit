@@ -19,6 +19,8 @@ from app.domain.audit import (
     LogicalRole,
     RiskCategory,
     SourceDocumentRecord,
+    SourceReferenceInput,
+    SourceRefKind,
     SourceNotReadyError,
 )
 
@@ -201,7 +203,7 @@ class DiscoveryService:
                 )
                 discovered = self._engine.discover(engine_documents)
             candidates = tuple(
-                _normalise_candidate(candidate) for candidate in discovered
+                _normalise_candidate(candidate, engine_documents) for candidate in discovered
             )
             self._repository.append_job_event(
                 job_id,
@@ -250,7 +252,10 @@ class DiscoveryService:
         return documents
 
 
-def _normalise_candidate(value: CandidateIssueInput) -> CandidateIssueInput:
+def _normalise_candidate(
+    value: CandidateIssueInput,
+    documents: Sequence[DiscoveryDocument],
+) -> CandidateIssueInput:
     title = value.title_hint.strip()
     observed_gap = value.observed_gap.strip()
     evidence_summary = value.evidence_summary.strip()
@@ -259,23 +264,51 @@ def _normalise_candidate(value: CandidateIssueInput) -> CandidateIssueInput:
             "Discovery candidate requires title_hint, observed_gap and "
             "evidence_summary."
         )
-    evidence_refs = _normalise_refs(value.evidence_refs, "evidence_refs")
-    sop_refs = _normalise_refs(value.sop_refs, "sop_refs")
+
+    available_documents = {
+        document.document_id: document for document in documents
+    }
+    source_refs: list[SourceReferenceInput] = []
+    for reference in value.source_refs:
+        document_id = reference.document_id.strip()
+        document = available_documents.get(document_id)
+        if document is None:
+            raise ValueError(
+                f"Discovery candidate references unknown document: {document_id}"
+            )
+        if document.logical_role == LogicalRole.SAMPLE:
+            raise ValueError(
+                "Discovery candidate cannot use Samples as evidence or criteria."
+            )
+        source_refs.append(
+            SourceReferenceInput(
+                reference_id=str(uuid4()),
+                ref_kind=SourceRefKind(reference.ref_kind),
+                document_id=document_id,
+                unit_id=reference.unit_id.strip() if reference.unit_id else None,
+                location=dict(reference.location),
+                quote=reference.quote.strip() if reference.quote else None,
+            )
+        )
+
+    kinds = {reference.ref_kind for reference in source_refs}
+    missing_kinds = [
+        kind.value
+        for kind in (SourceRefKind.EVIDENCE, SourceRefKind.CRITERIA)
+        if kind not in kinds
+    ]
+    if missing_kinds:
+        raise ValueError(
+            "Discovery candidate requires source_refs tagged: "
+            + ", ".join(missing_kinds)
+        )
     return CandidateIssueInput(
         title_hint=title,
         observed_gap=observed_gap,
         evidence_summary=evidence_summary,
-        evidence_refs=evidence_refs,
-        sop_refs=sop_refs,
+        source_refs=tuple(source_refs),
         risk_category=RiskCategory(value.risk_category.strip()),
     )
-
-
-def _normalise_refs(values: Sequence[str], field: str) -> tuple[str, ...]:
-    refs = tuple(dict.fromkeys(value.strip() for value in values if value.strip()))
-    if not refs:
-        raise ValueError(f"Discovery candidate requires at least one {field} entry.")
-    return refs
 
 
 def _discovery_input_hash(

@@ -1,6 +1,7 @@
 """Typed records passed between UAT application and persistence layers."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -114,6 +115,42 @@ class SourceReferenceRecord:
     quote: str | None = None
 
 
+def source_reference_label(
+    value: SourceReferenceInput | SourceReferenceRecord,
+) -> str:
+    """Build the legacy display value from a canonical source reference."""
+    description = value.location.get("description")
+    if isinstance(description, str) and description.strip():
+        location = description.strip()
+    elif value.location:
+        location = json.dumps(
+            value.location,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    else:
+        location = ""
+    return f"{value.document_id} - {location}" if location else value.document_id
+
+
+def compatibility_reference_lists(
+    values: tuple[SourceReferenceInput | SourceReferenceRecord, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Derive deprecated evidence/SOP arrays from canonical references."""
+    evidence = tuple(
+        source_reference_label(value)
+        for value in values
+        if value.ref_kind == SourceRefKind.EVIDENCE
+    )
+    criteria = tuple(
+        source_reference_label(value)
+        for value in values
+        if value.ref_kind == SourceRefKind.CRITERIA
+    )
+    return evidence, criteria
+
+
 @dataclass(frozen=True)
 class SourceDocumentRecord:
     document_id: str
@@ -133,8 +170,7 @@ class CandidateIssueInput:
     title_hint: str
     observed_gap: str
     evidence_summary: str
-    evidence_refs: tuple[str, ...]
-    sop_refs: tuple[str, ...]
+    source_refs: tuple[SourceReferenceInput, ...]
     risk_category: RiskCategory
 
 

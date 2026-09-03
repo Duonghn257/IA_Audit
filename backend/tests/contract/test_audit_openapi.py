@@ -21,6 +21,31 @@ def test_openapi_publishes_v2_workspace_contract(tmp_path: Path) -> None:
         "Strategic",
         "Financial",
     ]
+    schemas = app.openapi()["components"]["schemas"]
+    assert schemas["SourceRefKind"]["enum"] == ["EVIDENCE", "CRITERIA"]
+    assert set(schemas["CreateManualIssueRequest"]["properties"]) == {
+        "observed_gap",
+        "title_hint",
+        "evidence_summary",
+        "risk_category",
+        "status",
+        "source_refs",
+    }
+    assert set(schemas["UpdateIssueRequest"]["properties"]) == {
+        "row_version",
+        "observed_gap",
+        "title_hint",
+        "evidence_summary",
+        "risk_category",
+        "source_refs",
+    }
+    assert schemas["SourceReferenceRequest"]["required"] == [
+        "ref_kind",
+        "document_id",
+    ]
+    issue_response = schemas["IssueResponse"]["properties"]
+    assert issue_response["evidence_refs"]["deprecated"] is True
+    assert issue_response["sop_refs"]["deprecated"] is True
     paths = app.openapi()["paths"]
 
     assert set(paths["/api/v1/projects/{project_id}/versions"]) == {"get", "post"}
