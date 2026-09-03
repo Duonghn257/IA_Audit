@@ -15,6 +15,7 @@ const props = defineProps<{
   loading?: boolean;
   saving?: boolean;
   error?: string;
+  auditRunning?: boolean;
 }>();
 const emit = defineEmits<{
   audit: [];
@@ -79,7 +80,7 @@ function retry(): void {
   emit("retry");
 }
 function startAudit(): void {
-  emit("audit");
+  if (!props.auditRunning) emit("audit");
 }
 function chooseDisposition(status: IssueStatus): void {
   if (selectedIssue.value) emit("disposition", selectedIssue.value, status);
@@ -298,8 +299,8 @@ function submitIssueForm(form: IssueEditorValue): void {
     />
     <footer class="uat-audit-preflight">
       <span>♢&nbsp; Audit preflight</span><strong>{{ approvedCount }} approved issues</strong><i v-if="warningCount" />
-      <b v-if="warningCount">{{ warningCount }} warning{{ warningCount === 1 ? "" : "s" }}</b><PrimaryButton :disabled="!approvedCount" type="button" @click="startAudit">
-        ▷&nbsp; Audit current version
+      <b v-if="warningCount">{{ warningCount }} warning{{ warningCount === 1 ? "" : "s" }}</b><PrimaryButton :disabled="!approvedCount || auditRunning" type="button" @click="startAudit">
+        {{ auditRunning ? "↻ Auditting…" : "▷ Audit current version" }}
       </PrimaryButton>
     </footer>
   </section>

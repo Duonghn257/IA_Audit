@@ -3868,21 +3868,31 @@
 .uat-issue-modal .uat-issue-editor footer .uat-button { min-height:40px; padding-inline:17px; border-radius:9px; font-size:12px; }
 
 
-/* Audit progress reuses the Source & Discovery step language. */
-.uat-run-progress { margin-bottom: 20px; }
-.uat-run-progress>footer { margin-top: 16px; color: #777167; font-size: 9px; }
-.uat-audit-progress-steps {
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 12px;
-  overflow: visible;
-  padding: 4px 0 8px;
+
+/* Focused current-step card for Audit execution. */
+.uat-current-step {
+  margin-bottom: 20px;
+  padding: 22px 26px 17px;
+  overflow: hidden;
+  border: 1px solid #dfd7c7;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fffdf7 0%, #fff 58%);
+  box-shadow: 0 8px 24px rgba(65, 53, 27, .04);
 }
-.uat-audit-progress-steps>div { min-width: 0; padding: 8px; border-radius: 9px; background: #faf8f3; }
-.uat-audit-progress-steps>div span { min-width: 0; }
-.uat-audit-progress-steps strong, .uat-audit-progress-steps small { overflow-wrap: anywhere; word-break: normal; }
-.uat-run-progress .uat-discovery-progress-header { min-width: 0; }
-.uat-run-progress .uat-discovery-progress-header>div { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
-.uat-run-progress .uat-discovery-progress-header span { overflow-wrap: anywhere; }
+.uat-current-step-main { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 16px; }
+.uat-current-step-spinner { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid #d79a00; border-radius: 50%; color: #916000; background: #fff3c5; font-size: 20px; animation: spin 1.6s linear infinite; }
+.uat-current-step-copy { min-width: 0; }
+.uat-current-step-copy small { color: #8b6819; font-size: 9px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
+.uat-current-step-copy h2 { margin: 4px 0 3px; font-size: 15px; letter-spacing: .01em; }
+.uat-current-step-copy p { margin: 0; overflow-wrap: anywhere; color: #696359; font-size: 10px; }
+.uat-current-step-main>strong { color: #805800; font-size: 16px; }
+.uat-current-step-track { height: 6px; margin: 17px 0 13px 62px; overflow: hidden; border-radius: 99px; background: #eee9de; }
+.uat-current-step-track i { height: 100%; display: block; border-radius: inherit; background: linear-gradient(90deg, #d79a00, #f2bd26); transition: width .25s ease; }
+.uat-current-step>footer { margin-left: 62px; display: flex; justify-content: space-between; gap: 16px; color: #807a70; font-size: 9px; }
+.uat-current-step>footer span { min-width: 0; overflow-wrap: anywhere; }
+
+.uat-runs-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.uat-runs-card, .uat-outputs-card { width: 100%; }
 .uat-runs-empty { min-height: 300px; display: grid; place-content: center; justify-items: center; border: 1px dashed #d9d2c6; border-radius: 12px; text-align: center; background: #fff; }
 .uat-runs-empty>span { color: #9a6a00; font-size: 28px; }
 .uat-runs-empty h2 { margin: 12px 0 5px; font-size: 15px; }
@@ -3893,19 +3903,10 @@
 .uat-run-row>b.failed, .uat-run-row>b.incomplete { color: #9e2929; background: #fdecec; }
 .uat-run-row>button { grid-column: 2; justify-self: start; padding: 0; border: 0; color: #795400; background: transparent; font-size: 10px; font-weight: 700; cursor: pointer; }
 
-@media (max-width: 760px) {
-  .uat-runs-grid { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 1200px) {
-  .uat-audit-progress-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .uat-run-progress .uat-discovery-progress-header { align-items: flex-start; }
-  .uat-run-progress .uat-discovery-progress-header>div { justify-content: flex-start; }
-}
-
 @media (max-width: 640px) {
-  .uat-run-progress { padding: 16px; }
-  .uat-audit-progress-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .uat-run-progress .uat-discovery-progress-header>div { display: grid; gap: 5px; }
-  .uat-run-progress .uat-discovery-progress-header i { display: none; }
+  .uat-current-step { padding: 18px 16px 15px; }
+  .uat-current-step-main { grid-template-columns: 38px minmax(0, 1fr) auto; gap: 11px; }
+  .uat-current-step-spinner { width: 36px; height: 36px; font-size: 17px; }
+  .uat-current-step-track { margin-left: 49px; }
+  .uat-current-step>footer { margin-left: 49px; display: grid; gap: 5px; }
 }

@@ -73,6 +73,7 @@ let auditRecoveryAttempts = 0
 
 const selectedVersion = computed(() => versions.value.find((version) => version.version_id === selectedVersionId.value) || versions.value[0]!)
 const approvedCount = computed(() => issues.value.filter((issue) => issue.status === "APPROVED").length)
+const auditRunning = computed(() => jobs.value.some((job) => job.job_type === "AUDIT" && ["QUEUED", "RUNNING"].includes(job.state)))
 const nextVersionLabel = computed(() => `v0.${Math.max(...versions.value.map((item) => item.sequence_no), 0) + 1}`)
 
 onMounted(() => void loadWorkspace())
@@ -328,10 +329,15 @@ async function confirmAudit(): Promise<void> {
     const freshVersion = freshVersions.find((version) => version.version_id === selectedVersionId.value)
     if (!freshVersion) throw new Error("The selected audit version no longer exists.")
     versions.value = freshVersions
-    const job = await startAuditJob(props.project.project_id, freshVersion.version_id, freshVersion.issue_revision)
+    let job = await startAuditJob(props.project.project_id, freshVersion.version_id, freshVersion.issue_revision)
+    if (["FAILED", "INCOMPLETE"].includes(job.state)) {
+      auditEvents.value = []
+      job = await retryAuditJob(job.job_id)
+    }
     auditModalOpen.value = false
     activeTab.value = "runs"
     applyAuditJob(job)
+    if (job.state === "SUCCEEDED") await finishCompletedAudit(job)
   } catch (error) {
     emit("error", error instanceof Error ? error.message : "Could not start the audit run.")
   } finally {
@@ -341,8 +347,22 @@ async function confirmAudit(): Promise<void> {
 
 function applyAuditJob(job: AuditJob): void {
   jobs.value = [job, ...jobs.value.filter((item) => item.job_id !== job.job_id)]
-  activeAuditJobId.value = job.job_id
-  if (["QUEUED", "RUNNING"].includes(job.state)) openAuditStream(job.job_id)
+  if (["QUEUED", "RUNNING"].includes(job.state)) {
+    activeAuditJobId.value = job.job_id
+    openAuditStream(job.job_id)
+  } else {
+    activeAuditJobId.value = null
+  }
+}
+
+async function finishCompletedAudit(job: AuditJob): Promise<void> {
+  const versionId = selectedVersionId.value
+  const [history, freshOutputs] = await Promise.all([
+    listJobEvents(job.job_id),
+    listVersionOutputs(props.project.project_id, versionId),
+  ])
+  auditEvents.value = history
+  outputs.value = freshOutputs
 }
 
 async function resumeAuditJob(job: AuditJob): Promise<void> {
@@ -449,7 +469,7 @@ defineExpose({ createNewAudit })
     <div class="uat-project-content">
       <div v-if="!selectedVersion" class="uat-detail-loading">Loading project workspace…</div>
       <SourceDiscoveryTab v-else-if="activeTab === 'source'" :state="discoveryState" :source-tree="sourceTree" :source-loading="sourceLoading" :source-error="sourceError" :correlation-id="correlationId" :error="discoveryError" :error-title="discoveryErrorTitle" @find="findCandidates" @retry="retryCandidates" @reload-source="loadSourceTree" />
-      <CandidateIssuesTab v-else-if="activeTab === 'candidates'" :issues="issues" :loading="issuesLoading" :saving="issueSaving" :error="issueError" @select="loadIssueDetail" @create="createIssue" @update="updateIssue" @disposition="updateDisposition" @retry="loadIssues()" @audit="auditModalOpen = true" />
+      <CandidateIssuesTab v-else-if="activeTab === 'candidates'" :issues="issues" :audit-running="auditRunning" :loading="issuesLoading" :saving="issueSaving" :error="issueError" @select="loadIssueDetail" @create="createIssue" @update="updateIssue" @disposition="updateDisposition" @retry="loadIssues()" @audit="auditModalOpen = true" />
       <RunsOutputsTab v-else :jobs="jobs" :outputs="outputs" :events="auditEvents" :project-name="project.name" :version-label="selectedVersion.label" @download="downloadOutput" @retry="retryAudit" />
     </div>
     <AuditConfirmationModal v-if="selectedVersion" :open="auditModalOpen" :version-label="selectedVersion.label" :approved-count="approvedCount" :submitting="auditSubmitting" @close="auditModalOpen = false" @confirm="confirmAudit" />
