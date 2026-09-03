@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue"
 import ProjectsWorkspaceV2 from "../modules/projects/ProjectsWorkspaceV2.vue"
-import { getAuthSession, logout, shouldLoadAuthSession, startGoogleLogin, SESSION_EXPIRED_EVENT, UnauthenticatedError } from "../shared/auth/auth-api"
+import { getAuthSession, logout, startGoogleLogin, SESSION_EXPIRED_EVENT, UnauthenticatedError } from "../shared/auth/auth-api"
 import type { AuthSession } from "../shared/auth/auth-api"
 import LoginView from "../shared/auth/LoginView.vue"
 
@@ -24,13 +24,12 @@ function returnToLogin(): void {
 onMounted(async () => {
   window.addEventListener(SESSION_EXPIRED_EVENT, showSessionExpired)
   const authErrorParam = new URLSearchParams(window.location.search).get("auth_error")
-  const shouldLoadSession = shouldLoadAuthSession()
   if (authErrorParam) {
     authError.value = `Google login failed: ${authErrorParam}`
     window.history.replaceState({}, "", window.location.pathname)
   }
 
-  if (!shouldLoadSession) {
+  if (authErrorParam) {
     checkingSession.value = false
     return
   }

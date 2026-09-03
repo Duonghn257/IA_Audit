@@ -27,6 +27,13 @@ const progressPercent = computed(() => {
   if (!activeJob.value) return 0
   return Math.min(100, Math.round((activeJob.value.completed_items / Math.max(activeJob.value.total_items || stages.length, 1)) * 100))
 })
+const currentStepNumber = computed(() => Math.max(activeStageIndex.value + 1, 1))
+const currentStageLabel = computed(() => {
+  const stage = activeJob.value?.stage
+  return stage && stages.includes(stage as typeof stages[number])
+    ? stage.replaceAll("_", " ")
+    : "PREPARING AUDIT"
+})
 const latestMessage = computed(() => props.events.at(-1)?.message || activeJob.value?.current_message || "Audit is queued and will start shortly.")
 
 function runTitle(job: AuditJob): string {
@@ -49,29 +56,27 @@ function stateLabel(job: AuditJob): string {
   return job.state.replaceAll("_", " ").toLowerCase().replace(/^./, (letter) => letter.toUpperCase())
 }
 
-function stageState(index: number): "done" | "active" | "pending" {
-  if (index < activeStageIndex.value) return "done"
-  if (index === activeStageIndex.value) return "active"
-  return "pending"
-}
 </script>
 
 <template>
   <section class="uat-runs-tab">
-    <article v-if="activeJob" class="uat-discovery-progress uat-run-progress" aria-live="polite">
-      <header class="uat-discovery-progress-header">
-        <h2>Running audit</h2>
-        <div><span>{{ latestMessage }}</span><i /><span>Correlation ID:&nbsp; {{ activeJob.correlation_id }}</span></div>
-      </header>
-      <div class="uat-progress-steps uat-audit-progress-steps">
-        <template v-for="(stage, index) in stages" :key="stage">
-          <div :class="stageState(index)">
-            <b>{{ stageState(index) === "done" ? "✓" : stageState(index) === "active" ? "↻" : index + 1 }}</b>
-            <span><strong>{{ stage.replaceAll("_", " ") }}</strong><small>{{ stageState(index) === "done" ? "Completed" : stageState(index) === "active" ? `${progressPercent}%` : "Pending" }}</small></span>
-          </div>
-        </template>
+    <article v-if="activeJob" class="uat-current-step" aria-live="polite">
+      <div class="uat-current-step-main">
+        <span class="uat-current-step-spinner" aria-hidden="true">↻</span>
+        <div class="uat-current-step-copy">
+          <small>Audit in progress · Step {{ currentStepNumber }} of {{ stages.length }}</small>
+          <h2>{{ currentStageLabel }}</h2>
+          <p>{{ latestMessage }}</p>
+        </div>
+        <strong>{{ progressPercent }}%</strong>
       </div>
-      <footer>Job continues if you leave this page.</footer>
+      <div class="uat-current-step-track" role="progressbar" :aria-valuenow="progressPercent" aria-valuemin="0" aria-valuemax="100">
+        <i :style="{ width: `${progressPercent}%` }" />
+      </div>
+      <footer>
+        <span>Job continues if you leave this page.</span>
+        <span>Correlation ID: {{ activeJob.correlation_id }}</span>
+      </footer>
     </article>
 
     <article v-if="currentOutput" class="uat-output-ready">
