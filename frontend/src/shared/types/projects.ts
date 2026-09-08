@@ -71,7 +71,7 @@ export type UploadSessionState =
   | "PROMOTED"
   | "EXPIRED"
 
-export type LogicalRole = "SCOPE" | "RISK_CONTEXT" | "EVIDENCE" | "CRITERIA" | "CONTEXT"
+export type LogicalRole = "SCOPE" | "RISK_CONTEXT" | "EVIDENCE" | "CRITERIA" | "SAMPLE" | "CONTEXT"
 
 export interface SourceFile {
   document_id: string
@@ -267,6 +267,27 @@ export interface OutputRevision {
   content_hash: string
   created_at: string
   download_url: string
+}
+
+export type CentralAssetKind = "GUIDELINE" | "TEMPLATE"
+
+export interface CentralAsset {
+  asset_id: string
+  kind: CentralAssetKind
+  filename: string
+  content_hash: string
+  size_bytes: number
+  content_type: string | null
+  uploaded_by: string
+  created_at: string
+  updated_at: string
+  download_url: string
+}
+
+export interface CentralKnowledge {
+  guidelines: CentralAsset[]
+  template: CentralAsset | null
+  ready_for_audit: boolean
 }
 
 export interface CreatedAuditProject {

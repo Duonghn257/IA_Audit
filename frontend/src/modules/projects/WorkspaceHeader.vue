@@ -19,7 +19,7 @@ const props = withDefaults(defineProps<{
   loggingOut: false,
 })
 
-defineEmits<{ primary: []; logout: [] }>()
+defineEmits<{ primary: []; logout: []; config: [] }>()
 
 const accountOpen = ref(false)
 const initials = computed(() => props.user.display_name
@@ -60,6 +60,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", closeOnEscape))
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
         {{ primaryLabel }}
       </PrimaryButton>
+      <button class="uat-config-trigger" type="button" aria-label="Open application configuration" title="Application configuration" @click="$emit('config')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1A8 8 0 0 0 14.8 6l-.3-2.6h-4L10.2 6a8 8 0 0 0-1.7 1.1l-2.4-1-2 3.4L6.1 11a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a8 8 0 0 0 1.7 1.1l.3 2.6h4l.3-2.6a8 8 0 0 0 1.7-1.1l2.4 1 2-3.4-2-1.5a7 7 0 0 0 .1-1Z" /></svg></button>
       <button class="account-trigger" type="button" :aria-expanded="accountOpen" aria-controls="account-drawer" aria-label="Open account" @click="accountOpen = true">
         <img v-if="user.picture_url" :src="user.picture_url" alt="" referrerpolicy="no-referrer" />
         <span v-else>{{ initials }}</span>
