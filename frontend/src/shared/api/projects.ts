@@ -14,6 +14,8 @@ import type {
   SourceTree,
   UploadSession,
   UploadProjectInput,
+  CentralAsset,
+  CentralKnowledge,
 } from "../types/projects"
 import { serialiseAuditorIssues } from "../auditor-inputs"
 import { getCsrfToken, notifySessionExpired } from "../auth/auth-api"
@@ -81,6 +83,32 @@ export function apiUrl(path: string): string {
   if (/^https?:\/\//.test(path)) return path
   if (path.startsWith("/api/")) return `${API_BASE_URL}${path}`
   return `${API_ROOT}${path.startsWith("/") ? path : `/${path}`}`
+}
+
+export function getCentralKnowledge(): Promise<CentralKnowledge> {
+  return request<CentralKnowledge>("/central-knowledge")
+}
+
+export function uploadGuideline(file: File): Promise<CentralAsset> {
+  const form = new FormData()
+  form.append("file", file, (file.webkitRelativePath || file.name).split("/").at(-1) || file.name)
+  return request<CentralAsset>("/central-knowledge/guidelines", { method: "POST", body: form })
+}
+
+export function uploadTemplate(file: File): Promise<CentralAsset> {
+  const form = new FormData()
+  form.append("file", file, (file.webkitRelativePath || file.name).split("/").at(-1) || file.name)
+  return request<CentralAsset>("/central-knowledge/template", { method: "PUT", body: form })
+}
+
+export async function deleteCentralAsset(assetId: string): Promise<void> {
+  const response = await fetch(apiUrl(`/central-knowledge/files/${encodeURIComponent(assetId)}`), {
+    credentials: "include",
+    method: "DELETE",
+    headers: { Accept: "application/json", "X-CSRF-Token": getCsrfToken() },
+  })
+  if (response.status === 401) notifySessionExpired()
+  if (!response.ok) throw new ApiClientError(`Request failed with status ${response.status}`, { status: response.status })
 }
 
 export function listProjects(): Promise<AuditProject[]> {

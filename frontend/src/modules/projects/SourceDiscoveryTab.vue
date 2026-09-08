@@ -88,6 +88,7 @@ function roleTone(role: LogicalRole): string {
     RISK_CONTEXT: "risk",
     EVIDENCE: "evidence",
     CRITERIA: "criteria",
+    SAMPLE: "sample",
     CONTEXT: "context",
   }[role]
 }

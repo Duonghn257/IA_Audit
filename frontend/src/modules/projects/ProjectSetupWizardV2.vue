@@ -29,8 +29,8 @@ const error = ref("")
 
 const MAX_UPLOAD_BYTES = 100_000_000
 const SUPPORTED_FILE = /\.(docx|pdf|xlsx)$/i
-const REQUIRED_FOLDER = /(^|\/)(AWP|APM|Process SOP|Process Understanding)(\/|$)/
-const CENTRAL_FOLDER = /(^|\/)(Guidelines|Samples|Output)(\/|$)|template/i
+const REQUIRED_FOLDER = /(^|\/)(AWP|APM|Process SOP|Process Understanding|Samples)(\/|$)/
+const CENTRAL_FOLDER = /(^|\/)(Guidelines|Output)(\/|$)|template/i
 
 function relativePath(file: File): string {
   return file.webkitRelativePath || file.name
@@ -52,7 +52,7 @@ const centralDuplicates = computed(() => centralAssetFiles.value.length > 0)
 const validationReport = computed(() => session.value?.validation_report)
 const blockingFiles = computed(() => validationReport.value?.errors.length || 0)
 const warningCount = computed(() => (validationReport.value?.warnings.length || 0) + centralAssetFiles.value.length)
-const roleCoverage = [["SCOPE", "AWP (Scope of work)"], ["RISK_CONTEXT", "APM (Risk context)"], ["EVIDENCE", "Evidence (Process understanding)"], ["CRITERIA", "Criteria (Process SOP)"]] as const
+const roleCoverage = [["SCOPE", "AWP (Scope of work)"], ["RISK_CONTEXT", "APM (Risk context)"], ["EVIDENCE", "Evidence (Process understanding)"], ["CRITERIA", "Criteria (Process SOP)"], ["SAMPLE", "Samples (Optional)"]] as const
 const roleGroups = computed(() => {
   const groups = new Map<string, UploadSessionFile[]>()
   for (const file of session.value?.files || []) {
